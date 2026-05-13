@@ -1,0 +1,45 @@
+﻿@model VC_IMS.Models.VC_formTableDatum
+
+<!-- BACK BUTTON -->
+<div style="width: 110px;">
+    <a href="##" onClick="history.go(-1); return false;"
+       class="btn rounded-pill btn-outline-dark-1 radius-8 px-20 py-11 d-flex align-items-center gap-2">
+        <iconify-icon icon="ion:return-up-back-sharp"></iconify-icon> Back
+    </a>
+    <br />
+    <br />
+</div>
+<!-- ----------------------------------------------- -->
+@{
+    ViewData["Title"] = "Program - " + @ViewBag.formName;
+ }
+<link href="~/css/forms-stylesheet.css" rel="stylesheet" />
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+
+<script type="text/javascript">
+    $.ajax({
+        url: '@Url.Action("Preview", "form")?&dataId=@ViewBag.dataID&uuid=@ViewBag.uuid',
+        type: "GET",
+        success: function (result) {
+            $("#fb-rendered-form").html(result);
+        }
+    });
+</script>
+
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card radius-12 h-100">
+            <div class="card-body py-16 px-24" style="overflow-y: scroll; height:500px;">
+                <form asp-action="Edit" asp-controller="formTableData" method="post" enctype="multipart/form-data">
+                    @Html.Raw(ViewBag.header)
+                    <input asp-for="Id" type="hidden" name="Id" value="@ViewBag.dataID" />
+                    <input asp-for="VC_formsId" type="hidden" name="SW_formsId" value="@ViewBag.formId" />
+                    <div id="fb-rendered-form"></div>
+                    <button type="submit" class="btn btn-success">Submit</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+

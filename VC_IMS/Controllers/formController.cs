@@ -1,0 +1,1332 @@
+﻿using Humanizer;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Graph.Models;
+using Microsoft.SqlServer.Server;
+using VC_IMS.Data;
+using VC_IMS.Models;
+using VC_IMS.Services.Elsa;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection.Metadata.Ecma335;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using System.Xml.Linq;
+using static System.Net.Mime.MediaTypeNames;
+using VC_IMS.Models.ViewModels;
+
+
+namespace VCIMS.Controllers
+{
+    public class formController : Controller
+    {
+        private readonly VC_IMSDb_moreContext _context;
+
+        public formController(VC_IMSDb_moreContext context)
+        {
+            _context = context;
+        }
+
+        /// <summary>
+        /// Forms UUID
+        /// </summary>
+        /// 
+        /// <remarks>
+        /// Generates the routing unique that represents forms
+        /// </remarks>
+        /// 
+        public string GenerateNewUuidAsString()
+        {
+            // Generates a new GUID and converts it to a string representation
+            return Guid.NewGuid().ToString();
+        }
+
+        public async Task<IActionResult> Program(string? uuid)
+        {
+            // 0. Varibales
+            // 
+            var f_Linq = _context.VC_forms.Where(m => m.uuid.Equals(uuid));
+            int formId = Convert.ToInt32(f_Linq.Select(m => m.Id).FirstOrDefault());
+            ViewBag.uuid = uuid;
+            ViewBag.formId = formId;
+            ViewBag.form = f_Linq.Select(m => m.form).FirstOrDefault();
+            ViewBag.formName = f_Linq.Select(m => m.name).FirstOrDefault();
+            ViewBag.formImage = f_Linq.Select(m => m.image).FirstOrDefault();
+            ViewBag.formDesc = f_Linq.Select(m => m.desc).FirstOrDefault();
+            ViewBag.header = f_Linq.Select(x => x.header).FirstOrDefault();
+            ViewBag.formLINK = _context.VC_forms.Where(x => x.is_linking == true).ToList();
+
+            ViewBag.processes = await _context.VC_formProcesses
+                .Where(c => c.VC_formsId == formId)
+                .Select(c => new { c.name, c.url })      // anonymous with only what the view needs
+                .ToListAsync();
+
+            ViewBag.entries = _context.VC_formTableData.Where(c => c.VC_formsId == formId).Count();
+            ViewBag.entries_pending = _context.VC_formTableData.Where(
+                c => c.VC_formsId == formId &&
+                c.isApproval_01 == 0 ||
+                c.isApproval_02 == 0 ||
+                c.isApproval_03 == 0).Count();
+            ViewBag.entries_approved = _context.VC_formTableData.Where(
+                c => c.VC_formsId == formId &&
+                c.isApproval_01 == 1 ||
+                c.isApproval_02 == 1 ||
+                c.isApproval_03 == 1).Count();
+
+
+            // 1. Fetch form with JSON
+            var VCForm = await _context.VC_forms.FindAsync(formId);
+            if (VCForm == null) return NotFound("Form not found");
+
+            // 2. Deserialize JSON definition
+            var formDefinition = JsonSerializer.Deserialize<List<form_FieldAttributes>>(VCForm.form);
+            if (formDefinition == null || !formDefinition.Any())
+                return BadRequest("Invalid or empty form definition");
+
+            // 3. Fetch mappings from VC_formTableName
+            var tableNameMappings = _context.VC_formTableNames
+                .Where(t => t.VC_formsId == formId)
+                .ToList();
+
+            // 4. Join JSON fields with VC_formTableName mappings
+            var columnMappings = formDefinition
+                .Join(tableNameMappings,
+                      def => def.name,     // JSON name
+                      map => map.field,     // DB mapping name
+                      (def, map) => new ColumnMap
+                      {
+                          ColumnName = map.field, // e.g. FormData01
+                          Label = def.label       // e.g. "Text Field"
+                      })
+                .ToList();
+
+            if (!columnMappings.Any())
+                return BadRequest("No matching columns found for this form");
+
+            // 5. Fetch actual data rows from VC_formTableDatum
+            var dataRows = await _context.VC_formTableData
+                .Where(d => d.VC_formsId == formId)
+                .ToListAsync();
+
+            // 6. Convert data into dictionary per row
+            var rowList = new List<Dictionary<string, string>>();
+            foreach (var row in dataRows)
+            {
+                var dict = new Dictionary<string, string>();
+                foreach (var col in columnMappings)
+                {
+                    // use reflection to get the property value dynamically
+                    var prop = typeof(VC_formTableDatum).GetProperty(col.ColumnName);
+                    if (prop != null)
+                    {
+                        var val = prop.GetValue(row)?.ToString() ?? string.Empty;
+                        dict[col.ColumnName] = val;
+                        dict["IDS"] = Convert.ToString(row.Id);
+                    }
+                }
+                rowList.Add(dict);
+            }
+
+            // 7. Build ViewModel
+            var model = new FormTableViewModel
+            {
+                FormName = VCForm.name,
+                Columns = columnMappings,
+                Rows = rowList
+            };
+
+            return View(model);
+        }
+
+        public async Task<IActionResult> ProgramExpand(string? uuid)
+        {
+            // 0. Varibales
+            // 
+            var f_Linq = _context.VC_forms.Where(m => m.uuid.Equals(uuid));
+            int formId = Convert.ToInt32(f_Linq.Select(m => m.Id).FirstOrDefault());
+            ViewBag.uuid = uuid;
+            ViewBag.formId = formId;
+            ViewBag.form = f_Linq.Select(m => m.form).FirstOrDefault();
+            ViewBag.formName = f_Linq.Select(m => m.name).FirstOrDefault();
+            ViewBag.formImage = f_Linq.Select(m => m.image).FirstOrDefault();
+            ViewBag.formDesc = f_Linq.Select(m => m.desc).FirstOrDefault();
+            ViewBag.header = f_Linq.Select(x => x.header).FirstOrDefault();
+            var linking = f_Linq.Select(x => x.is_linking).FirstOrDefault();
+                ViewBag.formLINK = _context.VC_forms.Where(x => x.is_linking == true).ToList();
+
+            ViewBag.processes = _context.VC_formProcesses
+                .Where(c => c.VC_formsId == formId)
+                .Select(c => new SelectListItem() { Text = c.url, Value = c.url })
+                .ToList();
+
+            ViewBag.entries = _context.VC_formTableData.Where(c => c.VC_formsId == formId).Count();
+            ViewBag.entries_pending = _context.VC_formTableData.Where(
+                c => c.VC_formsId == formId &&
+                c.isApproval_01 == 0 ||
+                c.isApproval_02 == 0 ||
+                c.isApproval_03 == 0).Count();
+            ViewBag.entries_approved = _context.VC_formTableData.Where(
+                c => c.VC_formsId == formId &&
+                c.isApproval_01 == 1 ||
+                c.isApproval_02 == 1 ||
+                c.isApproval_03 == 1).Count();
+
+
+            // 1. Fetch form with JSON
+            var VCForm = await _context.VC_forms.FindAsync(formId);
+            if (VCForm == null) return NotFound("Form not found");
+
+            // 2. Deserialize JSON definition
+            var formDefinition = JsonSerializer.Deserialize<List<form_FieldAttributes>>(VCForm.form);
+            if (formDefinition == null || !formDefinition.Any())
+                return BadRequest("Invalid or empty form definition");
+
+            // 3. Fetch mappings from VC_formTableName
+            var tableNameMappings = _context.VC_formTableNames
+                .Where(t => t.VC_formsId == formId)
+                .ToList();
+
+            // 4. Join JSON fields with VC_formTableName mappings
+            var columnMappings = formDefinition
+                .Join(tableNameMappings,
+                      def => def.name,     // JSON name
+                      map => map.field,     // DB mapping name
+                      (def, map) => new ColumnMap
+                      {
+                          ColumnName = map.field, // e.g. FormData01
+                          Label = def.label       // e.g. "Text Field"
+                      })
+                .ToList();
+
+            if (!columnMappings.Any())
+                return BadRequest("No matching columns found for this form");
+
+            // 5. Fetch actual data rows from VC_formTableDatum
+            var dataRows = await _context.VC_formTableData
+                .Where(d => d.VC_formsId == formId)
+                .ToListAsync();
+
+            // 6. Convert data into dictionary per row
+            var rowList = new List<Dictionary<string, string>>();
+            foreach (var row in dataRows)
+            {
+                var dict = new Dictionary<string, string>();
+                foreach (var col in columnMappings)
+                {
+                    // use reflection to get the property value dynamically
+                    var prop = typeof(VC_formTableDatum).GetProperty(col.ColumnName);
+                    if (prop != null)
+                    {
+                        var val = prop.GetValue(row)?.ToString() ?? string.Empty;
+                        dict[col.ColumnName] = val;
+                        dict["IDS"] = Convert.ToString(row.Id);
+                    }
+                }
+                rowList.Add(dict);
+            }
+
+            // 7. Build ViewModel
+            var model = new FormTableViewModel
+            {
+                FormName = VCForm.name,
+                Columns = columnMappings,
+                Rows = rowList
+            };
+
+            return View(model);
+        }
+
+        public IActionResult Approval(string? uuid)
+        {
+            var formId = Convert.ToInt32(_context.VC_forms.Where(m => m.uuid == uuid).Select(m => m.Id).FirstOrDefault());
+
+            ViewBag.uuid = uuid;
+            ViewBag.formId = formId;
+
+            ViewBag.appAmt = Convert.ToInt32(_context.VC_forms.Where(m => m.uuid == uuid).Select(m => m.approvalAmt).FirstOrDefault());
+            var al1 = _context.VC_formTableData.Where(x => x.isApproval_01 == 0 && x.VC_formsId == formId).ToList();
+            var al2 = _context.VC_formTableData.Where(x => x.isApproval_02 == 0 && x.VC_formsId == formId).ToList();
+            var al3 = _context.VC_formTableData.Where(x => x.isApproval_03 == 0 && x.VC_formsId == formId).ToList();
+            var al4 = _context.VC_formTableData.Where(x => x.isApproval_04 == 0 && x.VC_formsId == formId).ToList();
+            var al5 = _context.VC_formTableData.Where(x => x.isApproval_05 == 0 && x.VC_formsId == formId).ToList();
+            ViewBag.appList01 = al1;
+            ViewBag.appList02 = al2;
+            ViewBag.appList03 = al3;
+            ViewBag.appList04 = al4;
+            ViewBag.appList05 = al5;
+            ViewBag.appList01Ctn = al1.Count();
+            ViewBag.appList02Ctn = al2.Count();
+            ViewBag.appList03Ctn = al3.Count();
+            ViewBag.appList04Ctn = al4.Count();
+            ViewBag.appList05Ctn = al5.Count();
+
+            return View();
+        }
+
+        public IActionResult ApprovalAction(int? dataID, int? appCnt, string uuid)
+        {
+            ViewBag.AppCnt = appCnt;
+            ViewBag.dataID = dataID;
+            ViewBag.uuid = uuid;
+            ViewBag.formId = Convert.ToInt32(_context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.VC_formsId).FirstOrDefault());
+            return View();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ApprovalAction([FromBody] IFormCollection frm)
+        {
+            if (!int.TryParse(frm["Id"], out int dataID))
+            {
+                return BadRequest("Invalid ID");
+            }
+
+            var VC_frmData = await _context.VC_formTableData.FindAsync(dataID);
+
+            if (VC_frmData == null)
+            {
+                return NotFound();
+            }
+
+            // Handle integers
+            // --------------------------------------------------
+            if (int.TryParse(frm["isApproval_01"], out int app1))
+                VC_frmData.isApproval_01 = app1;
+
+            if (int.TryParse(frm["isApproval_02"], out int app2))
+                VC_frmData.isApproval_02 = app2;
+
+            if (int.TryParse(frm["isApproval_03"], out int app3))
+                VC_frmData.isApproval_03 = app3;
+
+            if (int.TryParse(frm["isApproval_04"], out int app4))
+                VC_frmData.isApproval_04 = app4;
+
+            if (int.TryParse(frm["isApproval_05"], out int app5))
+                VC_frmData.isApproval_05 = app5;
+
+            // Handle comments (string fields)
+            // --------------------------------------------------
+            if (!string.IsNullOrWhiteSpace(frm["isAppComment_01"]))
+                VC_frmData.isAppComment_01 = frm["isAppComment_01"];
+
+            if (!string.IsNullOrWhiteSpace(frm["isAppComment_02"]))
+                VC_frmData.isAppComment_02 = frm["isAppComment_02"];
+
+            if (!string.IsNullOrWhiteSpace(frm["isAppComment_03"]))
+                VC_frmData.isAppComment_03 = frm["isAppComment_03"];
+
+            if (!string.IsNullOrWhiteSpace(frm["isAppComment_04"]))
+                VC_frmData.isAppComment_04 = frm["isAppComment_04"];
+
+            if (!string.IsNullOrWhiteSpace(frm["isAppComment_05"]))
+                VC_frmData.isAppComment_05 = frm["isAppComment_05"];
+
+
+            // Handle approvers (string fields)
+            // --------------------------------------------------
+            if (!string.IsNullOrWhiteSpace(frm["isApprover_01"]))
+                VC_frmData.isApprover_01 = frm["isApprover_01"];
+
+            if (!string.IsNullOrWhiteSpace(frm["isApprover_02"]))
+                VC_frmData.isApprover_02 = frm["isApprover_02"];
+
+            if (!string.IsNullOrWhiteSpace(frm["isApprover_03"]))
+                VC_frmData.isApprover_03 = frm["isApprover_03"];
+
+            if (!string.IsNullOrWhiteSpace(frm["isApprover_04"]))
+                VC_frmData.isApprover_04 = frm["isApprover_04"];
+
+            if (!string.IsNullOrWhiteSpace(frm["isApprover_05"]))
+                VC_frmData.isApprover_05 = frm["isApprover_05"];
+
+
+            // Handle approvers (datetime fields)
+            // --------------------------------------------------
+            if (DateTime.TryParse(frm["isApp_dateTime_01"], out var parsedDate1))
+                VC_frmData.isApp_dateTime_01 = parsedDate1;
+
+            if (DateTime.TryParse(frm["isApp_dateTime_02"], out var parsedDate2))
+                VC_frmData.isApp_dateTime_02 = parsedDate2;
+
+            if (DateTime.TryParse(frm["isApp_dateTime_03"], out var parsedDate3))
+                VC_frmData.isApp_dateTime_03 = parsedDate3;
+
+            if (DateTime.TryParse(frm["isApp_dateTime_04"], out var parsedDate4))
+                VC_frmData.isApp_dateTime_04 = parsedDate4;
+
+            if (DateTime.TryParse(frm["isApp_dateTime_05"], out var parsedDate5))
+                VC_frmData.isApp_dateTime_05 = parsedDate5;
+
+
+            string uuid = frm["uuid"].ToString();
+            await _context.SaveChangesAsync();
+
+            return RedirectToAction("Program", "Form", new { uuid });
+        }
+
+        public IActionResult ApprovalHistory(int? dataID, int? appCnt)
+        {
+            ViewBag.AppCnt = appCnt;
+            ViewBag.dataID = dataID;
+            ViewBag.AppNm1 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isApprover_01).FirstOrDefault();
+            ViewBag.AppNm2 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isApprover_02).FirstOrDefault();
+            ViewBag.AppNm3 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isApprover_03).FirstOrDefault();
+            ViewBag.AppNm4 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isApprover_04).FirstOrDefault();
+            ViewBag.AppNm5 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isApprover_05).FirstOrDefault();
+            ViewBag.AppCmt1 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isAppComment_01).FirstOrDefault();
+            ViewBag.AppCmt2 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isAppComment_02).FirstOrDefault();
+            ViewBag.AppCmt3 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isAppComment_03).FirstOrDefault();
+            ViewBag.AppCmt4 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isAppComment_04).FirstOrDefault();
+            ViewBag.AppCmt5 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isAppComment_05).FirstOrDefault();
+            ViewBag.AppDate1 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isApp_dateTime_01).FirstOrDefault()?.ToString("dd, MM yyyy");
+            ViewBag.AppDate2 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isApp_dateTime_02).FirstOrDefault()?.ToString("dd, MM yyyy");
+            ViewBag.AppDate3 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isApp_dateTime_03).FirstOrDefault()?.ToString("dd, MM yyyy");
+            ViewBag.AppDate4 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isApp_dateTime_04).FirstOrDefault()?.ToString("dd, MM yyyy");
+            ViewBag.AppDate5 = _context.VC_formTableData.Where(m => m.Id == dataID).Select(m => m.isApp_dateTime_05).FirstOrDefault()?.ToString("dd, MM yyyy");
+
+            return PartialView("Views/Shared/_ApprovalHistory.cshtml");
+        }
+
+        public async Task<IActionResult> Preview(string? dataID, string? uuid)
+        {
+            // ************** Varibales
+            //
+            int id = Convert.ToInt32(dataID);
+            var f_Linq = _context.VC_forms.Where(m => m.uuid.Equals(uuid));
+            int formId = f_Linq.Select(m => m.Id).FirstOrDefault();
+            ViewBag.formId = formId;
+            ViewBag.form = f_Linq.Select(m => m.form).FirstOrDefault();
+            ViewBag.formName = f_Linq.Select(m => m.name).FirstOrDefault();
+            ViewBag.formImage = f_Linq.Select(m => m.image).FirstOrDefault();
+            ViewBag.formDesc = f_Linq.Select(m => m.desc).FirstOrDefault();
+            ViewBag.header = f_Linq.Select(x => x.header).FirstOrDefault();
+
+            // ************* FormData
+            //
+            var _fData = await _context.VC_formTableData.FindAsync(id);
+            if (_fData == null)
+            {
+                return NotFound();
+            }
+            var stringArray = new string[]
+            {
+                _fData.FormData01,
+                _fData.FormData02,
+                _fData.FormData03,
+                _fData.FormData04,
+                _fData.FormData05,
+                _fData.FormData06,
+                _fData.FormData07,
+                _fData.FormData08,
+                _fData.FormData09,
+                _fData.FormData10,
+                _fData.FormData11,
+                _fData.FormData12,
+                _fData.FormData13,
+                _fData.FormData14,
+                _fData.FormData15,
+                _fData.FormData16,
+                _fData.FormData17,
+                _fData.FormData18,
+                _fData.FormData19,
+                _fData.FormData20,
+                _fData.FormData21,
+                _fData.FormData22,
+                _fData.FormData23,
+                _fData.FormData24,
+                _fData.FormData25,
+                _fData.FormData26,
+                _fData.FormData27,
+                _fData.FormData28,
+                _fData.FormData29,
+                _fData.FormData30,
+                _fData.FormData31,
+                _fData.FormData32,
+                _fData.FormData33,
+                _fData.FormData34,
+                _fData.FormData35,
+                _fData.FormData36,
+                _fData.FormData37,
+                _fData.FormData38,
+                _fData.FormData39,
+                _fData.FormData40,
+                _fData.FormData41,
+                _fData.FormData42,
+                _fData.FormData43,
+                _fData.FormData44,
+                _fData.FormData45,
+                _fData.FormData46,
+                _fData.FormData47,
+                _fData.FormData48,
+                _fData.FormData49,
+                _fData.FormData50,
+                _fData.FormData51,
+                _fData.FormData52,
+                _fData.FormData53,
+                _fData.FormData54,
+                _fData.FormData55,
+                _fData.FormData56,
+                _fData.FormData57,
+                _fData.FormData58,
+                _fData.FormData59,
+                _fData.FormData60,
+                _fData.FormData61,
+                _fData.FormData62,
+                _fData.FormData63,
+                _fData.FormData64,
+                _fData.FormData65,
+                _fData.FormData66,
+                _fData.FormData67,
+                _fData.FormData68,
+                _fData.FormData69,
+                _fData.FormData70,
+                _fData.FormData71,
+                _fData.FormData72,
+                _fData.FormData73,
+                _fData.FormData74,
+                _fData.FormData75,
+                _fData.FormData76,
+                _fData.FormData77,
+                _fData.FormData78,
+                _fData.FormData79,
+                _fData.FormData80,
+                _fData.FormData81,
+                _fData.FormData82,
+                _fData.FormData83,
+                _fData.FormData84,
+                _fData.FormData85,
+                _fData.FormData86,
+                _fData.FormData87,
+                _fData.FormData88,
+                _fData.FormData89,
+                _fData.FormData90,
+                _fData.FormData91,
+                _fData.FormData92,
+                _fData.FormData93,
+                _fData.FormData94,
+                _fData.FormData95,
+                _fData.FormData96,
+                _fData.FormData97,
+                _fData.FormData98,
+                _fData.FormData99,
+                _fData.FormData100,
+                _fData.FormData101,
+                _fData.FormData102,
+                _fData.FormData103,
+                _fData.FormData104,
+                _fData.FormData105,
+                _fData.FormData106,
+                _fData.FormData107,
+                _fData.FormData108,
+                _fData.FormData109,
+                _fData.FormData110,
+                _fData.FormData111,
+                _fData.FormData112,
+                _fData.FormData113,
+                _fData.FormData114,
+                _fData.FormData115,
+                _fData.FormData116,
+                _fData.FormData117,
+                _fData.FormData118,
+                _fData.FormData119,
+                _fData.FormData120,
+                _fData.FormData121,
+                _fData.FormData122,
+                _fData.FormData123,
+                _fData.FormData124,
+                _fData.FormData125,
+                _fData.FormData126,
+                _fData.FormData127,
+                _fData.FormData128,
+                _fData.FormData129,
+                _fData.FormData130,
+                _fData.FormData131,
+                _fData.FormData132,
+                _fData.FormData133,
+                _fData.FormData134,
+                _fData.FormData135,
+                _fData.FormData136,
+                _fData.FormData137,
+                _fData.FormData138,
+                _fData.FormData139,
+                _fData.FormData140,
+                _fData.FormData141,
+                _fData.FormData142,
+                _fData.FormData143,
+                _fData.FormData144,
+                _fData.FormData145,
+                _fData.FormData146,
+                _fData.FormData147,
+                _fData.FormData148,
+                _fData.FormData149,
+                _fData.FormData150,
+                _fData.FormData151,
+                _fData.FormData152,
+                _fData.FormData153,
+                _fData.FormData154,
+                _fData.FormData155,
+                _fData.FormData156,
+                _fData.FormData157,
+                _fData.FormData158,
+                _fData.FormData159,
+                _fData.FormData160,
+                _fData.FormData161,
+                _fData.FormData162,
+                _fData.FormData163,
+                _fData.FormData164,
+                _fData.FormData165,
+                _fData.FormData166,
+                _fData.FormData167,
+                _fData.FormData168,
+                _fData.FormData169,
+                _fData.FormData170,
+                _fData.FormData171,
+                _fData.FormData172,
+                _fData.FormData173,
+                _fData.FormData174,
+                _fData.FormData175,
+                _fData.FormData176,
+                _fData.FormData177,
+                _fData.FormData178,
+                _fData.FormData179,
+                _fData.FormData180,
+                _fData.FormData181,
+                _fData.FormData182,
+                _fData.FormData183,
+                _fData.FormData184,
+                _fData.FormData185,
+                _fData.FormData186,
+                _fData.FormData187,
+                _fData.FormData188,
+                _fData.FormData189,
+                _fData.FormData190,
+                _fData.FormData191,
+                _fData.FormData192,
+                _fData.FormData193,
+                _fData.FormData194,
+                _fData.FormData195,
+                _fData.FormData196,
+                _fData.FormData197,
+                _fData.FormData198,
+                _fData.FormData199,
+                _fData.FormData200,
+                _fData.FormData201,
+                _fData.FormData202,
+                _fData.FormData203,
+                _fData.FormData204,
+                _fData.FormData205,
+                _fData.FormData206,
+                _fData.FormData207,
+                _fData.FormData208,
+                _fData.FormData209,
+                _fData.FormData210,
+                _fData.FormData211,
+                _fData.FormData212,
+                _fData.FormData213,
+                _fData.FormData214,
+                _fData.FormData215,
+                _fData.FormData216,
+                _fData.FormData217,
+                _fData.FormData218,
+                _fData.FormData219,
+                _fData.FormData220,
+                _fData.FormData221,
+                _fData.FormData222,
+                _fData.FormData223,
+                _fData.FormData224,
+                _fData.FormData225,
+                _fData.FormData226,
+                _fData.FormData227,
+                _fData.FormData228,
+                _fData.FormData229,
+                _fData.FormData230,
+                _fData.FormData231,
+                _fData.FormData232,
+                _fData.FormData233,
+                _fData.FormData234,
+                _fData.FormData235,
+                _fData.FormData236,
+                _fData.FormData237,
+                _fData.FormData238,
+                _fData.FormData239,
+                _fData.FormData240,
+                _fData.FormData241,
+                _fData.FormData242,
+                _fData.FormData243,
+                _fData.FormData244,
+                _fData.FormData245,
+                _fData.FormData246,
+                _fData.FormData247,
+                _fData.FormData248,
+                _fData.FormData249,
+                _fData.FormData250,
+                _fData.isAppComment_01,
+                _fData.isAppComment_02,
+                _fData.isAppComment_03,
+                _fData.isAppComment_04,
+                _fData.isAppComment_05,    
+                _fData.isApprover_01,
+                _fData.isApprover_02,
+                _fData.isApprover_03,
+                _fData.isApprover_04,
+                _fData.isApprover_05,
+                _fData.isLinkingForm
+            };
+            ViewBag.Collection = stringArray;
+
+            var intArray = new int[]
+            {
+                _fData.isApproval_01 ?? 0,
+                _fData.isApproval_02 ?? 0,
+                _fData.isApproval_03 ?? 0,
+                _fData.isApproval_04 ?? 0,
+                _fData.isApproval_05 ?? 0
+            };
+            ViewBag.ApprovalCollection = intArray;
+
+            // ************* FormData Types
+            var _fDataType = _context.VC_formTableData_Types.Where(x => x.VC_formsId == formId).ToList();
+            if (_fDataType == null)
+            {
+                return NotFound();
+            }
+            ViewBag.Collection2 = _fDataType;
+            return PartialView("Views/Shared/_formPreview.cshtml");
+        }
+        
+        public IActionResult Update(int? dataID, string? uuid)
+        {
+            // 0. Varibales
+            // 
+            var f_Linq = _context.VC_forms.Where(m => m.uuid.Equals(uuid));
+            int formId = Convert.ToInt32(f_Linq.Select(m => m.Id).FirstOrDefault());
+            ViewBag.dataID = Convert.ToInt32(dataID);
+            ViewBag.uuid = uuid;
+            ViewBag.formId = formId;
+            ViewBag.form = f_Linq.Select(m => m.form).FirstOrDefault();
+            ViewBag.formName = f_Linq.Select(m => m.name).FirstOrDefault();
+            ViewBag.header = f_Linq.Select(x => x.header).FirstOrDefault();
+            return View();
+        }
+
+        public IActionResult Linking(string? uuid, string? originUUID)
+        {
+            var formLINK = _context.VC_forms.Where(x => x.is_linking == true && x.uuid == uuid);
+
+            ViewBag.header = formLINK.Select(x =>x.header).FirstOrDefault();
+            ViewBag.form = formLINK.Select(x => x.form).FirstOrDefault();
+            ViewBag.VC_formsId = formLINK.Select(x => x.Id).FirstOrDefault();
+            ViewBag.isLinkingForm = originUUID;
+            return PartialView("Views/Shared/_LinkingForm.cshtml");
+        }
+
+        // GET: form
+        public async Task<IActionResult> Index()
+        {
+            // main forms list (already used by the view)
+            var forms = await _context.VC_forms
+                .Include(s => s.VC_identity)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var formIds = forms.Select(f => f.Id).ToList();
+            return View(forms);
+        }
+
+
+        // GET: form/Details/5
+        public async Task<IActionResult> Details(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var VC_form = await _context.VC_forms
+                .Include(s => s.VC_identity)
+                .FirstOrDefaultAsync(m => m.Id == id);
+            if (VC_form == null)
+            {
+                return NotFound();
+            }
+
+            return View(VC_form);
+        }
+
+        // GET: form/Create
+        public IActionResult Create()
+        {
+            ViewBag.datetime = System.DateTime.UtcNow;
+            ViewBag.UUID = GenerateNewUuidAsString();
+            ViewData["VC_identityId"] = new SelectList(_context.VC_identities, "Id", "name");
+            return View();
+        }
+
+        // POST: form/Create
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create(
+            [Bind("Id,uuid,name,desc,form,dateModified,VC_identityId,is_linking,image,header,approvalAmt")] VC_form VC_form,
+            IFormFile image,
+            int? formTypeId,
+            int[] programTagIds
+        )
+
+        {
+            if (image == null || image.Length == 0)
+            {
+                return BadRequest("No file uploaded.");
+            }
+
+            // Define a path to save the file (e.g., in wwwroot/uploads)
+            var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+            if (!Directory.Exists(uploadPath))
+            {
+                Directory.CreateDirectory(uploadPath);
+            }
+
+            // Create a unique file name to avoid conflicts
+            var uniqueFileName = Guid.NewGuid().ToString() + "_" + image.FileName;
+            var filePath = Path.Combine(uploadPath, uniqueFileName);
+
+            // Save the file to the server
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await image.CopyToAsync(stream);
+            }
+
+            if (ModelState.IsValid)
+            {
+                var createdForm = new VC_form
+                {
+                    uuid = VC_form.uuid,
+                    name = VC_form.name,
+                    desc = VC_form.desc,
+                    form = VC_form.form,
+                    dateModified = VC_form.dateModified,
+                    VC_identityId = VC_form.VC_identityId,
+                    is_linking = VC_form.is_linking,
+                    image = uniqueFileName,
+                    header = VC_form.header,
+                    approvalAmt = VC_form.approvalAmt
+                };
+
+                _context.Add(createdForm);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+
+
+            ViewData["VC_identityId"] = new SelectList(_context.VC_identities, "Id", "name", VC_form.VC_identityId);
+            return View(VC_form);
+
+        }
+
+        public IActionResult Complete(int? id)
+        {
+            ViewBag.id = id;
+            ViewBag.frm = _context.VC_forms.Where(x => x.Id == id).Select(x => x.form).FirstOrDefault();
+            ViewBag.header = _context.VC_forms.Where(x => x.Id == id).Select(x => x.header).FirstOrDefault();
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Complete(IFormCollection frm)
+        {
+            // Resolve formId robustly (avoid FormatException when the field is missing/empty)
+            int fID;
+            var formIdRaw = frm["formId"].FirstOrDefault();
+            if (!int.TryParse(formIdRaw, out fID))
+            {
+                // try alternate keys or route values
+                var idRaw = frm["id"].FirstOrDefault();
+                if (int.TryParse(idRaw, out var altId))
+                {
+                    fID = altId;
+                }
+                else if (int.TryParse(HttpContext.Request.RouteValues["id"]?.ToString(), out var routeId))
+                {
+                    fID = routeId;
+                }
+                else
+                {
+                    var uuid = frm["uuid"].FirstOrDefault();
+                    if (!string.IsNullOrWhiteSpace(uuid))
+                    {
+                        fID = await _context.VC_forms
+                            .Where(x => x.uuid == uuid)
+                            .Select(x => x.Id)
+                            .FirstOrDefaultAsync();
+                    }
+                    else
+                    {
+                        return BadRequest("Missing form identifier (formId or uuid).");
+                    }
+                }
+            }
+            if (fID <= 0)
+            {
+                return BadRequest("Form not found for provided identifier.");
+            }
+
+            // fetch form JSON from DB
+            var VCForm = await _context.VC_forms.FindAsync(fID);
+            if (VCForm == null) return NotFound("Form not found");
+
+            // deserialize into a collection
+            var formDefinition = JsonSerializer.Deserialize<List<form_FieldAttributes>>(VCForm.form);
+
+            // --- STATIC field counters seeded from what's already saved for this form ---
+            var staticFields = _context.VC_formTableNames
+                .Where(n => n.VC_formsId == fID && n.field != null && n.field.StartsWith("STATIC_"))
+                .Select(n => n.field!)
+                .AsEnumerable(); // VCitch to LINQ-to-Objects before regex work
+
+            int nextH = staticFields
+                .Where(f => f.StartsWith("STATIC_H_", StringComparison.Ordinal))
+                .Select(f => {
+                    var m = StaticKeyRx.Match(f);
+                    return m.Success ? int.Parse(m.Groups[1].Value) : 0;
+                })
+                .DefaultIfEmpty(0)
+                .Max() + 1;
+
+            int nextP = staticFields
+                .Where(f => f.StartsWith("STATIC_P_", StringComparison.Ordinal))
+                .Select(f => {
+                    var m = StaticKeyRx.Match(f);
+                    return m.Success ? int.Parse(m.Groups[1].Value) : 0;
+                })
+                .DefaultIfEmpty(0)
+                .Max() + 1;
+
+
+            // Normalize static blocks (header/paragraph) so they get valid keys
+            var perTypeCounter = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var def in formDefinition)
+            {
+                var t = def.type?.ToLowerInvariant();
+                if (t == "header" || t == "paragraph")
+                {
+                    perTypeCounter.TryGetValue(t, out var idx);
+                    idx++; perTypeCounter[t] = idx;
+
+                    // 1) Give a display name if the builder omitted it
+                    var prefix = t == "header" ? "Header" : "Paragraph";
+                    def.label = EnsureName(def.name, def.label, prefix, idx);
+
+                    // 2) Give a synthetic field key if missing (never collides with FormData##)
+                    //    STATIC_H_### for headers, STATIC_P_### for paragraphs
+                    if (string.IsNullOrWhiteSpace(def.name))
+                    {
+                        def.name = t == "header"
+                            ? $"STATIC_H_{nextH++:D3}"
+                            : $"STATIC_P_{nextP++:D3}";
+                    }
+
+                }
+            }
+
+            if (formDefinition == null || !formDefinition.Any())
+                return BadRequest("Form definition empty or invalid JSON");
+
+            // ---------------------------
+            // UPSERT instead of AddRange
+            // ---------------------------
+            var incoming = formDefinition.Select(d => new
+            {
+                Field = d.name!.Trim(),                                // e.g., FormData07 or STATIC_H_001
+                DisplayName = (d.label ?? d.name)!.Trim(),             // human-friendly name in VC_formTableName
+                Type = d.type?.Trim().ToLowerInvariant() ?? "text"     // stored in VC_formTableData_Types
+            }).ToList();
+
+            var existingNames = await _context.VC_formTableNames
+                .Where(n => n.VC_formsId == fID)
+                .ToDictionaryAsync(n => n.field!, StringComparer.OrdinalIgnoreCase);
+
+            var existingTypes = await _context.VC_formTableData_Types
+                .Where(t => t.VC_formsId == fID)
+                .ToDictionaryAsync(t => t.field!, StringComparer.OrdinalIgnoreCase);
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var x in incoming)
+            {
+                seen.Add(x.Field);
+
+                // Names: update-or-insert
+                if (existingNames.TryGetValue(x.Field, out var nRow))
+                {
+                    nRow.name = x.DisplayName;
+                }
+                else
+                {
+                    _context.VC_formTableNames.Add(new VC_formTableName
+                    {
+                        VC_formsId = fID,
+                        name = x.DisplayName,
+                        field = x.Field
+                    });
+                }
+
+                // Types: update-or-insert
+                if (existingTypes.TryGetValue(x.Field, out var tRow))
+                {
+                    tRow.type = x.Type;
+                }
+                else
+                {
+                    _context.VC_formTableData_Types.Add(new VC_formTableData_Type
+                    {
+                        VC_formsId = fID,
+                        field = x.Field,
+                        type = x.Type
+                    });
+                }
+            }
+
+            // OPTIONAL: prune rows removed from the builder (keeps DB in sync with current form)
+            var prune = true; // set false if you prefer to retain old mappings
+            if (prune)
+            {
+                var staleTypeIds = existingTypes.Values
+                    .Where(t => !seen.Contains(t.field!))
+                    .Select(t => t.Id)
+                    .ToList();
+
+                if (staleTypeIds.Count > 0)
+                    await _context.VC_formTableData_Types
+                        .Where(t => staleTypeIds.Contains(t.Id))
+                        .ExecuteDeleteAsync();
+
+                var staleNameIds = existingNames.Values
+                    .Where(n => !seen.Contains(n.field!))
+                    .Select(n => n.Id)
+                    .ToList();
+
+                if (staleNameIds.Count > 0)
+                    await _context.VC_formTableNames
+                        .Where(n => staleNameIds.Contains(n.Id))
+                        .ExecuteDeleteAsync();
+            }
+
+            // Save atomically
+            //using (var tx = await _context.Database.BeginTransactionAsync())
+            //{
+            //    await _context.SaveChangesAsync();
+            //    await tx.CommitAsync();
+            //}
+
+            // Use the execution strategy returned by DbContext.Database.CreateExecutionStrategy()
+            var strategy = _context.Database.CreateExecutionStrategy();
+
+            await strategy.ExecuteAsync(async () =>
+            {
+                // All operations within this block will be treated as a single, retriable unit
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    await _context.SaveChangesAsync();
+
+                    // Commit the transaction only if all operations succeed
+                    await transaction.CommitAsync();
+                }
+                catch
+                {
+                    // Rollback the transaction in case of an error (if needed)
+                    await transaction.RollbackAsync();
+                    throw; // Re-throw the exception to propagate it
+                }
+            });
+
+            // After successful publish, go to the Program page for this form
+            return RedirectToAction(nameof(Program), new { uuid = VCForm.uuid });
+        }
+
+        // GET: form/Edit/5
+        public async Task<IActionResult> Edit(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var VC_form = await _context.VC_forms.FindAsync(id);
+            if (VC_form == null)
+            {
+                return NotFound();
+            }
+            ViewBag.frm = _context.VC_forms.Where(x => x.Id == id).Select(x => x.form).FirstOrDefault();
+            ViewBag.img = _context.VC_forms.Where(x => x.Id == id).Select(x => x.image).FirstOrDefault();
+            ViewBag.appAmt = _context.VC_forms.Where(x => x.Id == id).Select(x => x.approvalAmt).FirstOrDefault();
+            ViewData["VC_identityId"] = new SelectList(_context.VC_identities, "Id", "name", VC_form.VC_identityId);
+
+
+            return View(VC_form);
+        }
+
+        // POST: form/Edit/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(
+            int id,
+            // ✅ Bind only properties that actually exist + are editable
+            [Bind("Id,uuid,name,form,image,approvalAmt,VC_identityId,is_linking,header,desc")]
+    VC_form posted,
+            IFormFile? imageFile,
+            string? formFile,
+            int? formTypeId,
+            int[]? programTagIds
+        )
+        {
+            if (id != posted.Id) return NotFound();
+
+            // ✅ Load TRACKED entity so we only update allowed fields
+            var existing = await _context.VC_forms
+                .FirstOrDefaultAsync(f => f.Id == id);
+
+            if (existing == null) return NotFound();
+
+            // Normalize classification inputs
+            if (formTypeId.HasValue && formTypeId.Value <= 0) formTypeId = null;
+
+            programTagIds ??= Array.Empty<int>();
+            programTagIds = programTagIds.Where(x => x > 0).Distinct().ToArray();
+
+            if (!ModelState.IsValid)
+            {
+                ViewBag.VC_identityId = new SelectList(_context.VC_identities, "Id", "name", posted.VC_identityId);
+
+                ViewBag.frm = !string.IsNullOrWhiteSpace(formFile)
+                    ? formFile
+                    : (!string.IsNullOrWhiteSpace(posted.form) ? posted.form : existing.form);
+
+                ViewBag.img = string.IsNullOrWhiteSpace(posted.image) ? existing.image : posted.image;
+                ViewBag.appAmt = posted.approvalAmt;
+
+                return View(posted);
+            }
+
+            // ✅ Update allowed fields only
+            existing.name = posted.name;
+            existing.desc = posted.desc;
+            existing.header = posted.header;
+            existing.VC_identityId = posted.VC_identityId;
+            existing.is_linking = posted.is_linking;
+            existing.approvalAmt = posted.approvalAmt;
+
+            // ✅ Update form JSON safely (prefer formFile if provided)
+            if (!string.IsNullOrWhiteSpace(formFile))
+                existing.form = formFile;
+            else if (!string.IsNullOrWhiteSpace(posted.form))
+                existing.form = posted.form;
+            // else preserve existing.form
+
+            // ✅ Image handling
+            if (imageFile != null && imageFile.Length > 0)
+            {
+                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+                Directory.CreateDirectory(uploadsFolder);
+
+                var uniqueFileName = Guid.NewGuid() + "_" + Path.GetFileName(imageFile.FileName);
+                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    await imageFile.CopyToAsync(fileStream);
+                }
+
+                existing.image = uniqueFileName;
+            }
+            else
+            {
+                // preserve existing unless the page explicitly posted something else
+                if (!string.IsNullOrWhiteSpace(posted.image))
+                    existing.image = posted.image;
+            }
+
+            // ✅ IMPORTANT: update modification timestamp
+            existing.dateModified = DateTime.UtcNow;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!VC_formExists(existing.Id)) return NotFound();
+                throw;
+            }
+        }
+
+
+        // GET: form/Edit/5
+        public async Task<IActionResult> EditUpload(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var VC_form = await _context.VC_forms.FindAsync(id);
+            if (VC_form == null)
+            {
+                return NotFound();
+            }
+            ViewBag.frm = _context.VC_forms.Where(x => x.Id == id).Select(x => x.form).FirstOrDefault();
+            ViewBag.img = _context.VC_forms.Where(x => x.Id == id).Select(x => x.image).FirstOrDefault();
+            ViewBag.appAmt = _context.VC_forms.Where(x => x.Id == id).Select(x => x.approvalAmt).FirstOrDefault();
+            ViewData["VC_identityId"] = new SelectList(_context.VC_identities, "Id", "name", VC_form.VC_identityId);
+            return View(VC_form);
+        }
+
+        // POST: form/Edit/5
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditUpload(int id, [Bind("Id,uuid,name,desc,form,dateModified,VC_identityId,is_linking,image,header,approvalAmt")] VC_form VC_form, IFormFile image)
+        {
+            if (id != VC_form.Id)
+            {
+                return NotFound();
+            }
+
+            if (image == null || image.Length == 0)
+            {
+                return BadRequest("No file uploaded.");
+            }
+
+            // Define a path to save the file (e.g., in wwwroot/uploads)
+            var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+            if (!Directory.Exists(uploadPath))
+            {
+                Directory.CreateDirectory(uploadPath);
+            }
+
+            // Create a unique file name to avoid conflicts
+            var uniqueFileName = Guid.NewGuid().ToString() + "_" + image.FileName;
+            VC_form.image = uniqueFileName;
+            var filePath = Path.Combine(uploadPath, uniqueFileName);
+
+            // Save the file to the server
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await image.CopyToAsync(stream);
+            }
+
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    _context.Update(VC_form);
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!VC_formExists(VC_form.Id))
+                    {
+                        return NotFound();
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+                return RedirectToAction(nameof(Index));
+            }
+            ViewData["VC_identityId"] = new SelectList(_context.VC_identities, "Id", "name", VC_form.VC_identityId);
+            return View(VC_form);
+        }
+
+        // GET: form/Delete/5
+        public async Task<IActionResult> Delete(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var VC_form = await _context.VC_forms
+                .Include(s => s.VC_identity)
+                .FirstOrDefaultAsync(m => m.Id == id);
+            if (VC_form == null)
+            {
+                return NotFound();
+            }
+
+            return View(VC_form);
+        }
+
+        // POST: form/Delete/5
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(int id)
+        {
+            // remove corresponding form Data
+            await _context.VC_formTableData
+                .Where(c => c.VC_formsId == id)
+                .ExecuteDeleteAsync();
+
+            // remove corresponding form Data Types
+            await _context.VC_formTableData_Types
+                .Where(c => c.VC_formsId == id)
+                .ExecuteDeleteAsync();
+
+            // remove corresponding form Data Names
+            await _context.VC_formTableNames
+                .Where(c => c.VC_formsId == id)
+                .ExecuteDeleteAsync();
+
+            // remove corresponding form Processes
+            await _context.VC_formProcesses
+                .Where(c => c.VC_formsId == id)
+                .ExecuteDeleteAsync();
+
+            // remove corresponding form Reports
+            await _context.VC_formReports
+                .Where(c => c.VC_formsId == id)
+                .ExecuteDeleteAsync();
+
+
+            // finally remove form
+            var VC_form = await _context.VC_forms.FindAsync(id);
+            if (VC_form != null)
+            {
+                _context.VC_forms.Remove(VC_form);
+            }
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+
+        private bool VC_formExists(int id)
+        {
+            return _context.VC_forms.Any(e => e.Id == id);
+        }
+
+
+        private static readonly Regex StaticKeyRx = new(@"^STATIC_[HP]_(\d{3})$", RegexOptions.Compiled);
+
+        private static string EnsureName(string? nameFromBuilder, string? label, string fallbackPrefix, int indexWithinType)
+        {
+            var name = (nameFromBuilder ?? label)?.Trim();
+            if (string.IsNullOrEmpty(name))
+                name = $"{fallbackPrefix} {indexWithinType:D3}";
+            return name;
+        }
+
+
+    }
+}

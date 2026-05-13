@@ -1,0 +1,173 @@
+﻿@model IEnumerable<VC_IMS.Models.VC_form>
+
+@{
+    ViewData["Title"] = "Form Management";
+}
+<br />
+<div class="row gy-4" id="formsIndexLayout">
+    <div class="col-md-9" id="formsIndexMain">
+        <div class="card basic-data-table">
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <h6 class="text-lg mb-0">Forms</h6>
+
+                <div class="d-flex align-items-center gap-2">
+                    <a class="btn btn-primary-600 radius-8 px-20 py-11" asp-action="Create">Create New Form</a>
+
+                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                            id="btnToggleFormRefs" aria-expanded="true">
+                        Toggle References
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive" id="formsTableScroll">
+                    <table class="table bordered-table mb-0 align-middle w-100" id="dataTable" data-page-length='10'>
+                    <thead>
+                        <tr>
+                            <th scope="col">
+                                Manage
+                            </th>
+                            <th scope="col">
+                                UUID:
+                            </th>
+                            <th scope="col">
+                                Form Name:
+                            </th>
+                            <th scope="col">Site Identity</th>
+                            <th scope="col">
+                                Modified:
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model)
+                        {
+                            <tr>
+                                <td>
+                                    <a asp-action="Complete" asp-route-id="@item.Id" class="w-32-px h-32-px bg-yellow-light text-yellow-main rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="bitcoin-icons:share-filled"></iconify-icon></a>
+                                    <a asp-action="Details" asp-route-id="@item.Id" class="w-32-px h-32-px bg-primary-light text-primary-600 rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="iconamoon:eye-light"></iconify-icon></a>
+                                    <a asp-action="Edit" asp-route-id="@item.Id" class="w-32-px h-32-px bg-success-focus text-success-main rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="lucide:edit"></iconify-icon></a>
+                                    <a asp-action="Delete" asp-route-id="@item.Id" class="w-32-px h-32-px bg-danger-focus text-danger-main rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="mingcute:delete-2-line"></iconify-icon></a>
+                                </td>
+                                <td>
+                                    @item.uuid.Substring(0, 5) ...
+                                </td>
+                                <td>
+                                    @item.name
+                                </td>
+                                    <td class="swims-wrap">
+                                    @item.VC_identity?.name
+                                </td>
+
+                                <td>
+                                    @item.dateModified.ToLocalTime()
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3" id="formsIndexRefs">
+        <div class="card basic-data-table">
+            <div class="card-header">
+                Form References
+            </div>
+            <div class="card-body">
+                <a asp-area="" asp-action="Index" asp-controller="formTableData" type="button" class="btn rounded-pill btn-outline-primary-600 radius-8 px-20 py-11 d-flex align-items-center gap-2">
+                    <iconify-icon icon="mingcute:square-arrow-right-line" class="text-xl"></iconify-icon> Form Data
+                </a><br />
+                <a asp-area="" asp-action="Index" asp-controller="formTableName" type="button" class="btn rounded-pill btn-outline-primary-600 radius-8 px-20 py-11 d-flex align-items-center gap-2">
+                    <iconify-icon icon="mingcute:square-arrow-right-line" class="text-xl"></iconify-icon> Form Data Names
+                </a><br />
+                <a asp-area="" asp-action="Index" asp-controller="formTableData_Type" type="button" class="btn rounded-pill btn-outline-primary-600 radius-8 px-20 py-11 d-flex align-items-center gap-2">
+                    <iconify-icon icon="mingcute:square-arrow-right-line" class="text-xl"></iconify-icon> Form Data Types
+                </a><br />
+                <a asp-area="" asp-action="Index" asp-controller="formProcess" type="button" class="btn rounded-pill btn-outline-primary-600 radius-8 px-20 py-11 d-flex align-items-center gap-2">
+                    <iconify-icon icon="mingcute:square-arrow-right-line" class="text-xl"></iconify-icon> Form Processes
+                </a><br />
+                <a asp-area="" asp-action="Index" asp-controller="formReport" type="button" class="btn rounded-pill btn-outline-primary-600 radius-8 px-20 py-11 d-flex align-items-center gap-2">
+                    <iconify-icon icon="mingcute:square-arrow-right-line" class="text-xl"></iconify-icon> Form Reports
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* collapsed: hide panel, expand table */
+    #formsIndexRefs.is-collapsed {
+        display: none;
+    }
+</style>
+
+
+@section Scripts {
+   
+    
+
+}
+
+<script src="~/lib/jquery/dist/jquery.js"></script>
+<script src="~/js/datatables.min.js"></script>
+<script type="text/javascript">
+    let table = new DataTable('#dataTable');
+</script>
+
+<script>
+    (function () {
+        const main = document.getElementById("formsIndexMain");
+        const refs = document.getElementById("formsIndexRefs");
+        const btn = document.getElementById("btnToggleFormRefs");
+        if (!main || !refs || !btn) return;
+
+        const key = "swims.forms.index.refsCollapsed";
+
+        function apply(collapsed) {
+            if (collapsed) {
+                refs.classList.add("is-collapsed");
+                main.classList.remove("col-md-8");
+                main.classList.add("col-md-12");
+                btn.setAttribute("aria-expanded", "false");
+            } else {
+                refs.classList.remove("is-collapsed");
+                main.classList.remove("col-md-12");
+                main.classList.add("col-md-8");
+                btn.setAttribute("aria-expanded", "true");
+            }
+            localStorage.setItem(key, collapsed ? "1" : "0");
+        }
+
+        btn.addEventListener("click", function () {
+            apply(!refs.classList.contains("is-collapsed"));
+        });
+
+        // restore last state
+        apply(localStorage.getItem(key) === "1");
+    })();
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const scroll = document.getElementById('formsTableScroll');
+      if (!scroll) return;
+
+      // DataTables v1 uses .dataTables_filter, v2 uses .dt-search
+      const wrapper = scroll.closest('.card') || document;
+      const search = wrapper.querySelector('.dt-search, .dataTables_filter');
+      if (!search) return;
+
+      search.style.willChange = 'transform';
+
+      function sync() {
+        // If it moves the wrong way, flip the sign.
+        search.style.transform = `translateX(${scroll.scrollLeft}px)`;
+      }
+
+      sync();
+      scroll.addEventListener('scroll', sync, { passive: true });
+      window.addEventListener('resize', sync);
+    });
+</script>

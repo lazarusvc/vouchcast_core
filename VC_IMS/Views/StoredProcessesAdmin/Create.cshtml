@@ -1,0 +1,82 @@
+﻿@model VC_IMS.Models.ViewModels.StoredProcessEditViewModel
+@{
+    ViewData["Title"] = "Create Stored Procedure";
+}
+
+<form asp-action="Create" method="post">
+    @Html.AntiForgeryToken()
+
+    <div class="mb-3">
+        <div style="height:500px;border:1px dashed grey; padding: 10px;" id="editor"></div>
+        <input type="hidden" name="editorVal" id="editorVal" />
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Name" class="form-label"></label>
+        <input asp-for="Name" class="form-control" />
+        <span asp-validation-for="Name" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Description" class="form-label"></label>
+        <textarea asp-for="Description" class="form-control" rows="2"></textarea>
+    </div>
+
+    <div class="mb-3 form-check">
+        <input asp-for="ExcludeHeadersOnExport" class="form-check-input" />
+        <label asp-for="ExcludeHeadersOnExport" class="form-check-label">Exclude headers on CSV export</label>
+        <div class="form-text">Check this for bank files or other exports where the consumer doesn't want a header row.</div>
+    </div>
+    <hr />
+    <br />
+
+    <fieldset class="border p-3 mb-3">
+        <p class="text-muted">Provide either a <strong>ConnectionKey</strong> or a <strong>DataSource + Database</strong>. If you enter a SQL username/password, they will be encrypted on save.</p>
+
+        <legend class="float-none w-auto px-2">Connection (Option A)</legend>
+        <div class="mb-2">
+            <label asp-for="ConnectionKey" class="form-label"></label>
+            <input asp-for="ConnectionKey" class="form-control" placeholder="(Optional) Name from appsettings ConnectionStrings" value="DefaultConnection" />
+        </div>
+    </fieldset>
+
+    <fieldset class="border p-3 mb-3">
+        <legend class="float-none w-auto px-2">Connection (Option B)</legend>
+        <div class="row g-2">
+            <div class="col-md-6">
+                <label asp-for="DataSource" class="form-label"></label>
+                <input asp-for="DataSource" class="form-control" placeholder="server or server\instance" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="Database" class="form-label"></label>
+                <input asp-for="Database" class="form-control" />
+            </div>
+        </div>
+        <div class="row g-2 mt-1">
+            <div class="col-md-6">
+                <label asp-for="DbUser" class="form-label"></label>
+                <input asp-for="DbUser" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="DbPassword" class="form-label"></label>
+                <input asp-for="DbPassword" class="form-control" />
+            </div>
+        </div>
+    </fieldset>
+
+    <button type="submit" class="btn btn-success">Save</button>
+    <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+</form>
+
+<script src="~/js/ace.js"></script>
+<script type="text/javascript">
+    var editor = ace.edit("editor");
+    editor.resize()
+    editor.session.setMode("ace/mode/sql");
+    editor.session.setUseWrapMode(true);
+    editor.setHighlightActiveLine(false);
+    editor.setValue('-- e.g. Select * From dbo.VC_formTableData');
+    editor.setHighlightActiveLine(true);
+
+    document.getElementById("editorVal").value = editor.getValue();
+</script>

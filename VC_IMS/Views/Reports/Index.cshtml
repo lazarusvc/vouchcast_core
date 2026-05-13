@@ -1,0 +1,45 @@
+﻿@model VC_IMS.Models.ViewModels.ReportsIndexViewModel
+@{
+    ViewData["Title"] = "Reports";
+
+    var items = Model.Reports.Select(r => new SelectListItem
+    {
+        Value = r.Id.ToString(),
+        Text = r.Desc ?? r.Name,
+        Selected = (Model.SelectedId == r.Id)
+    });
+}
+<div class="card">
+  <div class="card-body">
+    <form asp-action="Run" method="post">
+      @Html.AntiForgeryToken()
+      <div class="row g-2 align-items-end">
+        <div class="col-md-8">
+          <label class="form-label">Select a report</label>
+          <select class="form-select" name="id" required>
+            <option value="">Choose…</option>
+                @foreach (var it in items)
+                {
+                    <option value="@it.Value" selected="@(it.Selected ? "selected" : null)">@it.Text</option>
+                }
+          </select>
+        </div>
+        <div class="col-md-4 text-end">
+          <button class="btn btn-outline-primary-400" type="submit" id="Btn" formaction="@Url.Action("Run","Reports")">Submit</button>
+           <a class="btn btn-dark-1 me-2" id="reportLnk" type="submit" target="_blank" href="@Url.Content(Model?.ViewerUrl)">Access</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="~/lib/jquery/dist/jquery.min.js"></script>                                                                                                                 
+<script type="text/javascript">
+    jQuery(function ($) {
+        if (!$('#reportLnk').attr('href')) {            
+            e.preventDefault(); // Prevents the default anchor action (e.g., page reload)
+        } else if ($('#reportLnk').attr('href')) {
+            $("#Btn").removeClass('btn btn-dark-1 me-2').addClass('btn btn-success me-2');
+        }
+    });
+</script>
