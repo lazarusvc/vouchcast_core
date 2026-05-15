@@ -1,4 +1,8 @@
 ﻿@model VC_IMS.Models.VC_formTableDatum
+@{
+    ViewData["Title"] = "Delete";
+}
+
 
 <!-- BACK BUTTON -->
 <div style="width: 110px;">
@@ -30,12 +34,13 @@
     <div class="col-sm-12">
         <div class="card radius-12 h-100">
             <div class="card-body py-16 px-24" style="overflow-y: scroll; height:500px;">
-                <form asp-action="Edit" asp-controller="formTableData" method="post" enctype="multipart/form-data">
+                <form asp-action="Delete" asp-controller="formTableData" method="post">
                     @Html.Raw(ViewBag.header)
                     <input asp-for="Id" type="hidden" value="@ViewBag.dataID" />
                     <input asp-for="VC_formsId" type="hidden" value="@ViewBag.formId" />
                     <div id="fb-rendered-form"></div>
-                    <button type="submit" class="btn btn-success">Submit</button>
+                    <h6 style="color:red;">Are you sure you want to delete this?</h6>
+                    <button type="submit" class="btn btn-danger">Delete</button>
                 </form>
             </div>
         </div>
@@ -43,4 +48,3 @@
 </div>
 
 <link href="~/css/forms-stylesheet.css" rel="stylesheet" />
-

@@ -181,7 +181,8 @@
                                 <td>
                                     <a asp-action="Preview" asp-route-dataID="@row["IDS"]" asp-route-uuid="@uid" class="w-32-px h-32-px bg-primary-light text-primary-600 rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="iconamoon:eye-light"></iconify-icon></a>
                                     <a asp-action="Update" asp-route-dataID="@row["IDS"]" asp-route-uuid="@uid" class="w-32-px h-32-px bg-success-focus text-success-main rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="lucide:edit"></iconify-icon></a>
-                                    <a href="#ex6" onclick="_AHB(@row["IDS"])" rel="modal:open" class="w-32-px h-32-px bg-danger-focus text-danger-main rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="flat-color-icons:timeline"></iconify-icon></a>
+                                    <a asp-action="DeleteFormRecord" asp-route-dataID="@row["IDS"]" asp-route-uuid="@uid" class="w-32-px h-32-px bg-danger-focus text-danger-main rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="gravity-ui:trash-bin"></iconify-icon></a>
+                                    <a href="#ex6" onclick="_AHB(@row["IDS"])" rel="modal:open" class="w-32-px h-32-px bg-purple-light text-danger-main rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="flat-color-icons:timeline"></iconify-icon></a>
                                 </td>
                                 @foreach (var col in Model.Columns)
                                 {

@@ -715,6 +715,21 @@ namespace VCIMS.Controllers
             return View();
         }
 
+        public IActionResult DeleteFormRecord(int? dataID, string? uuid)
+        {
+            // 0. Varibales
+            // 
+            var f_Linq = _context.VC_forms.Where(m => m.uuid.Equals(uuid));
+            int formId = Convert.ToInt32(f_Linq.Select(m => m.Id).FirstOrDefault());
+            ViewBag.dataID = Convert.ToInt32(dataID);
+            ViewBag.uuid = uuid;
+            ViewBag.formId = formId;
+            ViewBag.form = f_Linq.Select(m => m.form).FirstOrDefault();
+            ViewBag.formName = f_Linq.Select(m => m.name).FirstOrDefault();
+            ViewBag.header = f_Linq.Select(x => x.header).FirstOrDefault();
+            return View();
+        }
+
         public IActionResult Linking(string? uuid, string? originUUID)
         {
             var formLINK = _context.VC_forms.Where(x => x.is_linking == true && x.uuid == uuid);
