@@ -76,6 +76,11 @@ namespace VC_IMS.Controllers
         /// <returns>A <see cref="ViewResult"/> for the Index view.</returns>
         public IActionResult Index()
         {
+            return View();
+        }
+
+        public IActionResult Dashboard()
+        {
             ViewBag.title = _context.VC_identities.Select(x => x.name).FirstOrDefault();
             ViewBag.frmBtn = _context.VC_forms.AsNoTracking().ToList();
             return View();

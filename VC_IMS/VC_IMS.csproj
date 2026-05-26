@@ -56,7 +56,7 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.FileProviders.Physical" Version="9.0.8" />
     <PackageReference Include="Microsoft.Graph" Version="5.93.0" />
-    <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="9.0.0" />
+    <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="9.0.12" />
 
 	  <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.14" />
 	  <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="9.0.*" />

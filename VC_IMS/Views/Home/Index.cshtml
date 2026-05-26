@@ -1,27 +1,92 @@
-﻿@{
-    ViewData["title"] = ViewBag.title;
-    ViewData["subTitle"] = "Main";
+﻿@using System.Security.Claims
+@inject VC_IMSDb_moreContext dbContext
+@{
+    ViewData["Title"] = "Home";
+    ViewData["title"] = "Home";
+    ViewData["subTitle"] = "VCIMS Dashboard";
+    var isAuthenticated = User?.Identity?.IsAuthenticated == true;
 }
 
 <div class="row gy-4">
+    <div class="col-12">
+        <div class="card basic-data-table">
+            <!-- Hero header area (inspired by Faqs.cshtml) -->
+            <div class="card-header p-0 border-0 bg-primary-gradient">
+                <div class="responsive-padding-40-150">
+                    <div class="row gy-4 align-items-center">
+                        <div class="col-xl-7">
+                            <h4 class="mb-20">Welcome to @VC_IMS.Controllers.HomeController.global_Identity(dbContext, 1)</h4>
+                            <p class="mb-0 text-secondary-light max-w-634-px text-xl">
+                              @VC_IMS.Controllers.HomeController.global_Identity(dbContext, 2)
+                            </p>
+                        </div>
+                        <div class="col-xl-5 d-xl-block d-none">
+                            <img src="~/uploads/@VC_IMS.Controllers.HomeController.global_Identity(dbContext, 3)"
+                                 alt="VCIMS overview illustration"
+                                 class="img-fluid rounded-4 shadow-sm" />
+                        </div>
 
-    <!-- PROGRAMS -------------------------------------------------------- -->
-    @foreach (var inx in ViewBag.frmBtn)
-    {
-        <div class="col-lg-6">
-            <div class="card radius-12 overflow-hidden h-100 d-flex align-items-center flex-nowrap flex-row">
-                <div class="d-flex flex-shrink-0 w-170-px h-100">
-                    <img src="~/uploads/@inx.image" class="h-100 w-100 object-fit-cover" alt="" />
+                    </div>
                 </div>
-                <div class="card-body p-16 flex-grow-1">
-                    <h5 class="card-title text-lg text-primary-light mb-6">@inx.name</h5>
-                    <p class="card-text text-neutral-600 mb-16">@inx.desc</p>
-                    <a asp-action="Program" asp-controller="form" asp-route-uuid="@inx.uuid" type="button" class="btn rounded-pill btn-outline-primary-600 radius-8 px-20 py-11 d-flex align-items-center gap-2">
-                        <iconify-icon icon="mingcute:square-arrow-right-line" class="text-xl"></iconify-icon> FORM ID:- @inx.uuid.Substring(0, 5) ...
-                    </a>
+            </div>
+            <hr />
+            <!-- Main content area (tabs + accordions) -->
+            <div class="card-body bg-base responsive-padding-40-150">
+                <div class="row gy-4">
+                    <div class="col-lg-4">
+                        <div class="active-text-tab nav flex-column nav-pills bg-base shadow py-0 px-24 radius-12 border"
+                             id="home-info-tabs" role="tablist" aria-orientation="vertical">
+
+                            <button class="nav-link text-secondary-light fw-semibold text-xl px-0 py-16 border-bottom active"
+                                    id="tab-about-vcims"
+                                    data-bs-toggle="pill"
+                                    data-bs-target="#pane-about-vcims"
+                                    type="button"
+                                    role="tab"
+                                    aria-controls="pane-about-vcims"
+                                    aria-selected="true">
+                                About Software
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="col-lg-8">
+                        <div class="tab-content" id="home-info-tab-content">
+
+                            <!-- ABOUT SWIMS -->
+                            <div class="tab-pane fade show active"
+                                 id="pane-about-vcims"
+                                 role="tabpanel"
+                                 aria-labelledby="tab-about-vcims"
+                                 tabindex="0">
+
+                                <div class="accordion" id="accordionAboutvcims">
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header">
+                                            <button class="accordion-button text-primary-light text-xl"
+                                                    type="button"
+                                                    data-bs-toggle="collapse"
+                                                    data-bs-target="#about-q1"
+                                                    aria-expanded="true"
+                                                    aria-controls="about-q1">
+                                                What is VOUCHCAST?
+                                            </button>
+                                        </h2>
+                                        <div id="about-q1"
+                                             class="accordion-collapse collapse show"
+                                             data-bs-parent="#accordionAboutvcims">
+                                            <div class="accordion-body">
+                                                <strong>VOUCHCAST</strong> is a base platform made to handle database driven form management, backend processes via MSSQL Stored Procedures, Reporting and Analysis and much more ...
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div> <!-- /tab-content -->
+                    </div>
                 </div>
             </div>
         </div>
-        <br />
-    }
+    </div>
 </div>
