@@ -2,15 +2,17 @@
     ViewData["title"] = ViewBag.title;
     ViewData["subTitle"] = "Main";
 }
-
+<hr />
+<br/>
+<h6 align="RIGHT">Forms ::</h6>
 <div class="row gy-4">
 
     <!-- PROGRAMS -------------------------------------------------------- -->
     @foreach (var inx in ViewBag.frmBtn)
     {
-        <div class="col-lg-6">
+        <div class="col-sm-4">
             <div class="card radius-12 overflow-hidden h-100 d-flex align-items-center flex-nowrap flex-row">
-                <div class="d-flex flex-shrink-0 w-170-px h-100">
+                <div class="d-flex flex-shrink-0 w-50-px">
                     <img src="~/uploads/@inx.image" class="h-100 w-100 object-fit-cover" alt="" />
                 </div>
                 <div class="card-body p-16 flex-grow-1">
