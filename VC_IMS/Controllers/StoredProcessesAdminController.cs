@@ -58,26 +58,11 @@ namespace VC_IMS.Controllers
             };
 
             _db.VC_storedProcesses.Add(row);
-            await _db.SaveChangesAsync();
-
-      
+            await _db.SaveChangesAsync();      
 
             // CREATE Stored Procedure in DB if not exists
             // ___________________________________________
-
-            await _db.Database.ExecuteSqlRawAsync(String.Format(@"
-            CREATE PROCEDURE {0}
-                {1}
-            AS
-            BEGIN
-                {2}
-            END", vm.Name, "", frm["editorVal"].FirstOrDefault()));
-            //using (SqlConnection conn = new SqlConnection(_db))
-            //{
-            //    SqlCommand cmd = new SqlCommand(script, conn);
-            //    conn.Open();
-            //    cmd.ExecuteNonQuery();
-            //}
+            await _db.Database.ExecuteSqlRawAsync(String.Format(@"CREATE PROCEDURE dbo.usp_{0} {1}", vm.Name.ToString(), frm["editorVal"].ToString()));
 
 
             return RedirectToAction(nameof(Index));
@@ -151,6 +136,10 @@ namespace VC_IMS.Controllers
             {
                 _db.VC_storedProcesses.Remove(row); // cascade deletes params
                 await _db.SaveChangesAsync();
+
+                // DELETE Stored Procedure in DB if not exists
+                // ___________________________________________
+                await _db.Database.ExecuteSqlRawAsync(String.Format(@"DROP PROCEDURE IF EXISTS dbo.usp_{0};", row.Name.ToString()));
             }
             return RedirectToAction(nameof(Index));
         }

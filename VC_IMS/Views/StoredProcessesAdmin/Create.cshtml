@@ -8,27 +8,30 @@
 
     <div class="mb-3">
         <div style="height:500px;border:1px dashed grey; padding: 10px;" id="editor"></div>
-        <input type="hidden" name="editorVal" id="editorVal" />
+        <input type="hidden" name="editorVal" id="editorVal" value="" />
     </div>
 
-    <div class="mb-3">
-        <label asp-for="Name" class="form-label"></label>
-        <input asp-for="Name" class="form-control" />
-        <span asp-validation-for="Name" class="text-danger"></span>
-    </div>
+    <fieldset class="border p-3 mb-3">
+        <legend class="float-none w-auto px-2">Details</legend>
+        <div class="row g-2">
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" placeholder="after ... dbo.usp_" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
 
-    <div class="mb-3">
-        <label asp-for="Description" class="form-label"></label>
-        <textarea asp-for="Description" class="form-control" rows="2"></textarea>
-    </div>
+            <div class="mb-3">
+                <label asp-for="Description" class="form-label"></label>
+                <textarea asp-for="Description" class="form-control" rows="2" value="..."></textarea>
+            </div>
 
-    <div class="mb-3 form-check">
-        <input asp-for="ExcludeHeadersOnExport" class="form-check-input" />
-        <label asp-for="ExcludeHeadersOnExport" class="form-check-label">Exclude headers on CSV export</label>
-        <div class="form-text">Check this for bank files or other exports where the consumer doesn't want a header row.</div>
-    </div>
-    <hr />
-    <br />
+            <div class="mb-3 form-check">
+                <input asp-for="ExcludeHeadersOnExport" class="form-check-input" />
+                <label asp-for="ExcludeHeadersOnExport" class="form-check-label">Exclude headers on CSV export</label>
+                <div class="form-text">Check this for bank files or other exports where the consumer doesn't want a header row.</div>
+            </div>
+        </div>
+    </fieldset>
 
     <fieldset class="border p-3 mb-3">
         <p class="text-muted">Provide either a <strong>ConnectionKey</strong> or a <strong>DataSource + Database</strong>. If you enter a SQL username/password, they will be encrypted on save.</p>
@@ -64,7 +67,7 @@
         </div>
     </fieldset>
 
-    <button type="submit" class="btn btn-success">Save</button>
+    <button type="submit" class="btn btn-success" id="_saveSP">Save</button>
     <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
 </form>
 
@@ -75,8 +78,13 @@
     editor.session.setMode("ace/mode/sql");
     editor.session.setUseWrapMode(true);
     editor.setHighlightActiveLine(false);
-    editor.setValue('-- e.g. Select * From dbo.VC_formTableData');
+    editor.setValue("-- YOUR PARAMETER HERE e.g. @@param1 int\n\nAS\nBEGIN\n\n-- YOUR QUERY HERE\n\nEND");
     editor.setHighlightActiveLine(true);
 
-    document.getElementById("editorVal").value = editor.getValue();
+    // Listen for editor updates
+    editor.getSession().on('change', function() {
+        var newValue = editor.getValue();
+        document.getElementById("editorVal").value = newValue.replace(/[\r\n]+/g, ' ');
+    });       
+    
 </script>
