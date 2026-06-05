@@ -1,15 +1,26 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using Hangfire;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Graph.Models;
+using Microsoft.SqlServer.Server;
+using Microsoft.Win32.SafeHandles;
 using OfficeOpenXml;
+using OfficeOpenXml.DataValidation;
+using SimpleImpersonation;
 using System.Data;
+using System.Security;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text.Json;
 using VC_IMS.Data;
 using VC_IMS.Models;
 using VC_IMS.Models.ViewModels;
 using VC_IMS.Services;
+using VC_IMS.Services.Notifications;
+using static System.Net.WebRequestMethods;
 
 namespace VC_IMS.Controllers
 {
@@ -17,13 +28,19 @@ namespace VC_IMS.Controllers
     {
         private readonly VC_IMSDb_moreContext _db;
         private readonly StoredProcedureRunner _runner;
+        private readonly INotifier _notifier;
+        public readonly IConfiguration _configuration;
 
         public StoredProcessesController(
             VC_IMSDb_moreContext db,
-            StoredProcedureRunner runner)
+            StoredProcedureRunner runner,
+            INotifier notifier,
+            IConfiguration configuration)
         {
             _db = db;
             _runner = runner;
+            _notifier = notifier;
+            _configuration = configuration;
         }
 
         // GET: /StoredProcesses
@@ -208,23 +225,101 @@ namespace VC_IMS.Controllers
             //    },
             //    ct: HttpContext.RequestAborted);
 
+            //var username = http.User.Identity?.Name ?? $"user:{uid}";
+            //BackgroundJob.Enqueue(() => 
+            //    _notifier.NotifyUserAsync(uid, username, "DevTest", new { message = "Hello from dev endpoint" });
+            //);
+            // var xlsx = string.Empty;
+            var csv = string.Empty;
+            var txt = string.Empty;
+            var excelName = string.Empty;
+            var csvName = string.Empty;
+            var txtName = string.Empty;
             switch (format)
             {
                 case "xlsx":
                     var xlsx = DataTableToXlxs(table, sp.ExcludeHeadersOnExport);
-                    var excelName = $"{sp.Name.Replace(':', '_').Replace('/', '_')}_{DateTime.UtcNow:yyyyMMdd}.xlsx";
+                    excelName = $"{sp.Name.Replace(':', '_').Replace('/', '_')}_{DateTime.UtcNow:yyyyMMdd}.xlsx";
+
+                    // Run recurring job
+                    // RecurringJob.AddOrUpdate("BackEndProcesses Job", () => runnemail__Shedule(excelName), "0 12 * */2");
+
                     return File(xlsx.ToArray(), "application/octet-stream", excelName);
+                case "xlsx-sched":
+                    // await runnemail__Shedule(excelName, "application/octet-stream", "xlxs", xlsx.ToArray());
+                    return null;
                 case "csv":
-                    var csv = DataTableToCsv(table, includeHeaders: !sp.ExcludeHeadersOnExport);
-                    var csvName = $"{sp.Name.Replace(':', '_').Replace('/', '_')}_{DateTime.UtcNow:yyyyMMdd}.csv";
+
+                    csv = DataTableToCsv(table, includeHeaders: !sp.ExcludeHeadersOnExport);
+                    csvName = $"{sp.Name.Replace(':', '_').Replace('/', '_')}_{DateTime.UtcNow:yyyyMMdd}.csv";
                     return File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", csvName);
+                case "csv-sched":
+
+                    // GetYourFileContentResult(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", csvName);
+                    await runnemail__Shedule(_configuration);
+                    return null;
                 case "txt":
-                    var txt = DataTableToTxt(table, includeHeaders: !sp.ExcludeHeadersOnExport);
-                    var txtName = $"{sp.Name.Replace(':', '_').Replace('/', '_')}_{DateTime.UtcNow:yyyyMMdd}.txt";
+
+                    txt = DataTableToTxt(table, includeHeaders: !sp.ExcludeHeadersOnExport);
+                    txtName = $"{sp.Name.Replace(':', '_').Replace('/', '_')}_{DateTime.UtcNow:yyyyMMdd}.txt";
                     return File(System.Text.Encoding.UTF8.GetBytes(txt), "application/octet-stream", txtName);
+                case "txt-sched":
+
+                    // GetYourFileContentResult(System.Text.Encoding.UTF8.GetBytes(txt), "application/octet-stream", txtName);
+                    await runnemail__Shedule(_configuration);                    
+                    return null;
             }
 
             return BadRequest("Unsupported format.");
+        }
+
+        private static FileContentResult GetYourFileContentResult()
+        {
+            byte[] mockBytes = System.Text.Encoding.UTF8.GetBytes("Hello World File Content");
+            return new FileContentResult(mockBytes, "text/plain")
+            {
+                FileDownloadName = "example.txt"
+            };
+            // return File(b, header, filename);
+        }
+
+
+        // Schedule logic (RUN & EMAIL)
+        // ____________________________
+        [HttpPost]
+        public static async Task runnemail__Shedule(IConfiguration configuration)
+        {
+            FileContentResult fileResult = GetYourFileContentResult();
+            if (fileResult == null || fileResult.FileContents == null)
+            {
+                // "No file data found.";
+            }
+
+
+            // Storage location
+            string? fileStore = configuration.GetValue<string>("FileStorage:Location");
+
+            // Storage location Config & INIT
+            string? fileDomain = configuration.GetValue<string>("FileStorage:Domain");
+            string? fileUsername = configuration.GetValue<string>("FileStorage:Username");
+            string? filePassword = configuration.GetValue<string>("FileStorage:Password");
+            UserCredentials credentials = new UserCredentials(fileDomain, fileUsername, filePassword);
+            using SafeAccessTokenHandle userHandle = credentials.LogonUser(SimpleImpersonation.LogonType.NewCredentials);
+            #pragma warning disable CA1416 // Validate platform compatibility
+            await WindowsIdentity.RunImpersonatedAsync(userHandle, async () => { // do whatever you want as this user.
+
+                // Save to Drive location
+                string filePath = Path.Combine(fileStore, fileResult.FileDownloadName);
+
+                // 5. Stream the uploaded data into the destination file
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                //using (StreamWriter writer = new StreamWriter(stream, System.Text.Encoding.UTF8))
+                {
+                    await stream.WriteAsync(fileResult.FileContents, 0, fileResult.FileContents.Length);
+                }
+            });
+            #pragma warning restore CA1416 // Validate platform compatibility
+
         }
 
         private static string DataTableToCsv(System.Data.DataTable dt, bool includeHeaders = true)
@@ -357,11 +452,10 @@ namespace VC_IMS.Controllers
         // ---------------------------------------------------------------------------
         // Generic notification helper for stored procedure operations.
         // ---------------------------------------------------------------------------
+
         private async Task NotifyStoredProcAsync(
             string subject,
-            string body,
-            object? metadata = null,
-            CancellationToken ct = default)
+            string body)
         {
             var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var recipient = !string.IsNullOrWhiteSpace(userIdClaim)
@@ -375,20 +469,20 @@ namespace VC_IMS.Controllers
             {
                 Recipient = recipient,
                 Channel = "InApp",
-                Subject = subject,
-                Body = body,
-                MetadataJson = metadata == null ? null : JsonSerializer.Serialize(metadata)
+                Subject = subject
+                //Body = body,
+                //MetadataJson = metadata == null ? null : JsonSerializer.Serialize(metadata)
             };
 
-            try
-            {
-                // 🔔 Notify: Stored procedure event
-                // await _elsa.ExecuteByNameAsync("Swims.Notifications.DirectInApp", payload, ct);
-            }
-            catch
-            {
-                // Never block execution if Elsa is unavailable.
-            }
+            //try
+            //{
+            //    // 🔔 Notify: Stored procedure event
+            //    // await _elsa.ExecuteByNameAsync("Swims.Notifications.DirectInApp", payload, ct);
+            //}
+            //catch
+            //{
+            //    // Never block execution if Elsa is unavailable.
+            //}
         }
 
 

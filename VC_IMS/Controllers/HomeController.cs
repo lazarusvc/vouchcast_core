@@ -11,9 +11,9 @@
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Diagnostics;
 using VC_IMS.Models;
 using VC_IMS.Models.ViewModels;
-using System.Diagnostics;
 
 namespace VC_IMS.Controllers
 {
@@ -27,13 +27,15 @@ namespace VC_IMS.Controllers
     /// <param name="logger">
     /// The <see cref="ILogger{HomeController}"/> used for logging.
     /// </param>
-    public class HomeController(VC_IMSDb_moreContext context, ILogger<HomeController> logger) : Controller
+    public class HomeController(
+        VC_IMSDb_moreContext context, 
+        ILogger<HomeController> logger) : Controller
     {
         private readonly VC_IMSDb_moreContext _context = context;
         private readonly ILogger<HomeController> _logger = logger;
 
         // App Identity details
-        // ==================
+        // _______________________________________________________________________________________________________
         public static String global_Identity(VC_IMSDb_moreContext _cx, int? id)
         {
             string results = "";

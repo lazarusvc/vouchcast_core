@@ -22,6 +22,7 @@ namespace VC_IMS.Controllers
             _protector = dp.CreateProtector(DataProtectionPurposes.StoredProcedures);
         }
 
+
         // GET: /StoredProcessesAdmin
         public async Task<IActionResult> Index()
         {

@@ -31,6 +31,34 @@
                 <div class="form-text">Check this for bank files or other exports where the consumer doesn't want a header row.</div>
             </div>
         </div>
+
+        <div class="row">
+            <hr />
+            <div class="mb-3 form-check">
+                <input class="form-check-input" />
+                <label class="form-check-label">Run as scheduled & Email</label>
+            </div>
+
+            <div class="col-md-6">
+                <p>Folder list:</p>
+                <select>
+                    <option>...</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <p>Email list:</p>
+                <select>
+                    <option>...</option>
+                </select>        string uniqueFileName = Guid.NewGuid().ToString() + "_" + Path.GetExtension(file.FileName);
+        string filePath = Path.Combine(uploadFolder, uniqueFileName);
+
+        // 5. Stream the uploaded data into the destination file
+        using (var stream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.CopyToAsync(stream);
+        }
+            </div>
+        </div>
     </fieldset>
 
     <fieldset class="border p-3 mb-3">

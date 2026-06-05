@@ -51,6 +51,40 @@
             </a>
         }
     </div>
+    <div class="d-flex align-items-center">
+        @if (hasRows && Model.ProcessId > 0)
+        {
+            <a class="btn btn-sm btn-warning"
+                   asp-action="Export"
+                   asp-route-id="@Model.ProcessId"
+                   asp-route-format="csv-sched"
+                   asp-route-uid="@ViewBag.uid"
+                   asp-route-formId="@(ViewBag.formId ?? "")"
+                   asp-route-orgId="@(ViewBag.orgId ?? "")">
+                Schedule Export .csv
+            </a>
+            <p>&nbsp;&nbsp;</p>
+            <a class="btn btn-sm btn-warning"
+                   asp-action="Export"
+                   asp-route-id="@Model.ProcessId"
+                   asp-route-format="xlsx-sched"
+                   asp-route-uid="@ViewBag.uid"
+                   asp-route-formId="@(ViewBag.formId ?? "")"
+                   asp-route-orgId="@(ViewBag.orgId ?? "")">
+                Schedule Export .xlsx
+            </a>
+            <p>&nbsp;&nbsp;</p>
+            <a class="btn btn-sm btn-warning"
+                   asp-action="Export"
+                   asp-route-id="@Model.ProcessId"
+                   asp-route-format="txt-sched"
+                   asp-route-uid="@ViewBag.uid"
+                   asp-route-formId="@(ViewBag.formId ?? "")"
+                   asp-route-orgId="@(ViewBag.orgId ?? "")">
+                Schedule Export .txt
+            </a>
+        }
+    </div>
 </div>
 
 
