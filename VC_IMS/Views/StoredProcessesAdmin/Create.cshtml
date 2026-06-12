@@ -7,6 +7,10 @@
     @Html.AntiForgeryToken()
 
     <div class="mb-3">
+        <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" name="ownSP" id="ownSP" value="false" />
+            <label class="form-check-label">Write your own Stored Procedure</label>
+        </div>
         <div style="height:500px;border:1px dashed grey; padding: 10px;" id="editor"></div>
         <input type="hidden" name="editorVal" id="editorVal" value="" />
     </div>
@@ -31,33 +35,25 @@
                 <div class="form-text">Check this for bank files or other exports where the consumer doesn't want a header row.</div>
             </div>
         </div>
-
-        <div class="row">
-            <hr />
+        <br /><br />
+        <div class="row g-2">
             <div class="mb-3 form-check">
-                <input class="form-check-input" />
-                <label class="form-check-label">Run as scheduled & Email</label>
+                <input asp-for="ScheduleCheck" class="form-check-input" value="false" />
+                <label asp-for="ScheduleCheck" class="form-check-label">Run as scheduled, then Email</label>
+                <div class="form-text">Check this for bank files or other exports where the consumer doesn't want a header row.</div>
             </div>
 
-            <div class="col-md-6">
-                <p>Folder list:</p>
-                <select>
-                    <option>...</option>
+            <div class="col-md-12">
+                <p>Form with <strong>Folder Location (FormData01)</strong> __and__ <strong>Email Address(s) (FormData02)</strong> :</p>
+                <select asp-for="ScheduleForm" class=" form-control" asp-items="ViewBag.folder_n_emails">
+                    <option>-- Select --</option>
                 </select>
             </div>
-            <div class="col-md-6">
-                <p>Email list:</p>
-                <select>
-                    <option>...</option>
-                </select>        string uniqueFileName = Guid.NewGuid().ToString() + "_" + Path.GetExtension(file.FileName);
-        string filePath = Path.Combine(uploadFolder, uniqueFileName);
 
-        // 5. Stream the uploaded data into the destination file
-        using (var stream = new FileStream(filePath, FileMode.Create))
-        {
-            await file.CopyToAsync(stream);
-        }
-            </div>
+            <div class="mb-3">
+                <label asp-for="Schedule" class="form-label">Schedule</label>
+                <input asp-for="Schedule" class="form-control" placeholder="0 12 * */2" />
+                <span asp-validation-for="Schedule" class="text-danger"></span>
         </div>
     </fieldset>
 
@@ -99,13 +95,15 @@
     <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
 </form>
 
+
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/js/ace.js"></script>
 <script type="text/javascript">
     var editor = ace.edit("editor");
     editor.resize()
     editor.session.setMode("ace/mode/sql");
     editor.session.setUseWrapMode(true);
-    editor.setHighlightActiveLine(false);
+    editor.setHighlightActiveLine(true);
     editor.setValue("-- YOUR PARAMETER HERE e.g. @@param1 int\n\nAS\nBEGIN\n\n-- YOUR QUERY HERE\n\nEND");
     editor.setHighlightActiveLine(true);
 
@@ -115,4 +113,19 @@
         document.getElementById("editorVal").value = newValue.replace(/[\r\n]+/g, ' ');
     });       
     
+    // RENDER FORM
+    //
+    // --------------------------------------
+    jQuery(function($) {
+        $("#editor").hide();
+        $('#ownSP').on('change', function() {
+            if ($(this).prop('checked')) {
+                    $("#editor").show();
+                    $(this).val(true);
+                } else {
+                    $("#editor").hide();
+                    $(this).val(false);
+                }
+         });
+    });
 </script>

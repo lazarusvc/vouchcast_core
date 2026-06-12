@@ -111,6 +111,9 @@ public partial class VC_IMSDb_moreContext : DbContext
             entity.Property(e => e.DbUserEncrypted).HasMaxLength(512);
             entity.Property(e => e.DbPasswordEncrypted).HasMaxLength(1024);
             entity.Property(e => e.DbPasswordEncrypted).HasMaxLength(1024);
+            entity.Property(e => e.ScheduleCheck).HasMaxLength(256);
+            entity.Property(e => e.ScheduleForm).HasMaxLength(256);
+            entity.Property(e => e.Schedule).HasMaxLength(256);
             entity.HasMany(e => e.Params)
                   .WithOne(p => p.StoredProcess)
                   .HasForeignKey(p => p.StoredProcessId)

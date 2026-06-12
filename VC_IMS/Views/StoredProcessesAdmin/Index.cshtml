@@ -3,29 +3,48 @@
     ViewData["Title"] = "Stored Processes (Admin)";
 }
 
-<p>
-    <a class="btn btn-success" asp-action="Create">Create Process</a>
-    <a class="btn btn-outline-secondary" asp-area="" asp-controller="StoredProcesses" asp-action="Index">Run View</a>
-</p>
 
-<table class="table table-striped table-sm">
-    <thead>
-        <tr><th>Name</th><th>Description</th><th>Connection</th><th></th></tr>
-    </thead>
-    <tbody>
-        @foreach (var p in Model)
-        {
-            <tr>
-                <td>@p.Name</td>
-                <td>@p.Description</td>
-                <td>@(string.IsNullOrWhiteSpace(p.ConnectionKey) ? $"{p.DataSource}/{p.Database}" : p.ConnectionKey)</td>
-                <td class="text-nowrap">
-                    <a class="btn btn-primary btn-sm" asp-area="" asp-controller="StoredProcessParams" asp-action="Index" asp-route-processId="@p.Id">Params</a>
-                    <a class="btn btn-secondary btn-sm" asp-action="Edit" asp-route-id="@p.Id">Edit</a>
-                    <a class="btn btn-danger btn-sm" asp-action="Delete" asp-route-id="@p.Id">Delete</a>
-                    <a class="btn btn-outline-info btn-sm" asp-area="" asp-controller="StoredProcesses" asp-action="Run" asp-route-id="@p.Id">Run</a>
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card basic-data-table" style="overflow-x: scroll; height:500px;">
+            <div class="card-header">
+                <a class="btn btn-success" asp-action="Create">Create Process</a>
+            </div>
+            <div class="card-body">
+                <table class="table bordered-table mb-0" id="dataTable" data-page-length='10'>
+                    <thead>
+                        <tr>
+                            <th>Manage</th>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Connection</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Model)
+                        {
+                            <tr>
+                                <td class="text-nowrap">
+                                    <a asp-area="" asp-controller="StoredProcessParams" asp-action="Index" asp-route-processId="@p.Id" class="w-32-px h-32-px bg-primary-light text-primary-600 rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="gravity-ui:bars-play"></iconify-icon></a>
+                                    <a asp-action="Edit" asp-route-id="@p.Id" class="w-32-px h-32-px bg-success-focus text-success-main rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="lucide:edit"></iconify-icon></a>
+                                    <a asp-action="Delete" asp-route-id="@p.Id" class="w-32-px h-32-px bg-danger-focus text-danger-main rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="gravity-ui:trash-bin"></iconify-icon></a>
+                                    <a asp-area="" asp-controller="StoredProcesses" asp-action="Run" asp-route-id="@p.Id" class="w-32-px h-32-px bg-purple-light text-purple-main rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="ri:play-mini-line"></iconify-icon></a>
+                                </td>
+                                <td>@p.Name</td>
+                                <td>@p.Description</td>
+                                <td>@(string.IsNullOrWhiteSpace(p.ConnectionKey) ? $"{p.DataSource}/{p.Database}" : p.ConnectionKey)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/js/datatables.min.js"></script>
+<script type="text/javascript">
+    // ------------------------------------------- TABLE DATATABLE INIT
+    let table = new DataTable('#dataTable');
+</script>

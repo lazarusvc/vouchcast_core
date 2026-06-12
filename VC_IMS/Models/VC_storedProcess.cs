@@ -26,6 +26,12 @@ namespace VC_IMS.Models
         /// </summary>
         public bool ExcludeHeadersOnExport { get; set; }
 
+        public bool ScheduleCheck { get; set; }
+
+        public int? ScheduleForm { get; set; }
+
+        public string? Schedule { get; set; }
+
         public ICollection<VC_storedProcessParam> Params { get; set; } = new List<VC_storedProcessParam>();
     }
 }

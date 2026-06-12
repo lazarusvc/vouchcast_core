@@ -12,4 +12,6 @@ public static class TemplateKeys
     public const string Notifications_Generic = "Notifications_Generic";
     public const string Notifications_GenericWithContacts = "Notifications_GenericWithContacts";
 
+    public const string Backend_Process_Sent = "Backend_Process_Sent";
+
 }

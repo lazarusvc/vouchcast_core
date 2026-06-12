@@ -9,6 +9,7 @@ using Microsoft.Win32.SafeHandles;
 using OfficeOpenXml;
 using OfficeOpenXml.DataValidation;
 using SimpleImpersonation;
+using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Security;
 using System.Security.Claims;
@@ -17,8 +18,10 @@ using System.Security.Principal;
 using System.Text.Json;
 using VC_IMS.Data;
 using VC_IMS.Models;
+using VC_IMS.Models.Email;
 using VC_IMS.Models.ViewModels;
 using VC_IMS.Services;
+using VC_IMS.Services.Email;
 using VC_IMS.Services.Notifications;
 using static System.Net.WebRequestMethods;
 
@@ -30,17 +33,20 @@ namespace VC_IMS.Controllers
         private readonly StoredProcedureRunner _runner;
         private readonly INotifier _notifier;
         public readonly IConfiguration _configuration;
+        private readonly IFileStorageService _fileStorageService;
 
         public StoredProcessesController(
             VC_IMSDb_moreContext db,
             StoredProcedureRunner runner,
             INotifier notifier,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IFileStorageService fileStorageService)
         {
             _db = db;
             _runner = runner;
             _notifier = notifier;
             _configuration = configuration;
+            _fileStorageService = fileStorageService;
         }
 
         // GET: /StoredProcesses
@@ -179,7 +185,7 @@ namespace VC_IMS.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> Export(int id, string? format, int? formId = null, int? orgId = null)
+        public async Task<IActionResult?> Export(int id, string? format, int? formId = null, int? orgId = null)
         {
             var sp = await _db.VC_storedProcesses.Include(x => x.Params).FirstOrDefaultAsync(x => x.Id == id);
             if (sp is null) return NotFound();
@@ -229,7 +235,8 @@ namespace VC_IMS.Controllers
             //BackgroundJob.Enqueue(() => 
             //    _notifier.NotifyUserAsync(uid, username, "DevTest", new { message = "Hello from dev endpoint" });
             //);
-            // var xlsx = string.Empty;
+
+
             var csv = string.Empty;
             var txt = string.Empty;
             var excelName = string.Empty;
@@ -240,13 +247,17 @@ namespace VC_IMS.Controllers
                 case "xlsx":
                     var xlsx = DataTableToXlxs(table, sp.ExcludeHeadersOnExport);
                     excelName = $"{sp.Name.Replace(':', '_').Replace('/', '_')}_{DateTime.UtcNow:yyyyMMdd}.xlsx";
-
-                    // Run recurring job
-                    // RecurringJob.AddOrUpdate("BackEndProcesses Job", () => runnemail__Shedule(excelName), "0 12 * */2");
-
                     return File(xlsx.ToArray(), "application/octet-stream", excelName);
                 case "xlsx-sched":
-                    // await runnemail__Shedule(excelName, "application/octet-stream", "xlxs", xlsx.ToArray());
+                    var xlsx1 = DataTableToXlxs(table, sp.ExcludeHeadersOnExport);
+                    excelName = $"{sp.Name.Replace(':', '_').Replace('/', '_')}_{DateTime.UtcNow:yyyyMMdd}.xlsx";
+
+                    // Run recurring job -------------------------------------------------------------------------
+                    RecurringJob.AddOrUpdate(
+                        "BackEndProcesses Job - " + excelName, () =>
+                        _fileStorageService.SaveFileAsync(xlsx1.ToArray(), excelName),
+                        // runnemail__Shedule(id, _configuration, excelName, "application/octet-stream", xlsx1.ToArray()),
+                        sp.Schedule);
                     return null;
                 case "csv":
 
@@ -254,9 +265,15 @@ namespace VC_IMS.Controllers
                     csvName = $"{sp.Name.Replace(':', '_').Replace('/', '_')}_{DateTime.UtcNow:yyyyMMdd}.csv";
                     return File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", csvName);
                 case "csv-sched":
+                    csv = DataTableToCsv(table, includeHeaders: !sp.ExcludeHeadersOnExport);
+                    csvName = $"{sp.Name.Replace(':', '_').Replace('/', '_')}_{DateTime.UtcNow:yyyyMMdd}.csv";
 
-                    // GetYourFileContentResult(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", csvName);
-                    await runnemail__Shedule(_configuration);
+                    // Run recurring job -------------------------------------------------------------------------
+                    RecurringJob.AddOrUpdate(
+                        "BackEndProcesses Job - " + csvName, () =>
+                         _fileStorageService.SaveFileAsync(System.Text.Encoding.UTF8.GetBytes(csv), csvName),
+                         // runnemail__Shedule(id, _configuration, csvName, "text/csv", System.Text.Encoding.UTF8.GetBytes(csv)),
+                        sp.Schedule);
                     return null;
                 case "txt":
 
@@ -264,62 +281,52 @@ namespace VC_IMS.Controllers
                     txtName = $"{sp.Name.Replace(':', '_').Replace('/', '_')}_{DateTime.UtcNow:yyyyMMdd}.txt";
                     return File(System.Text.Encoding.UTF8.GetBytes(txt), "application/octet-stream", txtName);
                 case "txt-sched":
+                    txt = DataTableToTxt(table, includeHeaders: !sp.ExcludeHeadersOnExport);
+                    txtName = $"{sp.Name.Replace(':', '_').Replace('/', '_')}_{DateTime.UtcNow:yyyyMMdd}.txt";
 
-                    // GetYourFileContentResult(System.Text.Encoding.UTF8.GetBytes(txt), "application/octet-stream", txtName);
-                    await runnemail__Shedule(_configuration);                    
+                    // Run recurring job -------------------------------------------------------------------------
+                    RecurringJob.AddOrUpdate(
+                        "BackEndProcesses Job - " + txtName, () =>
+                        _fileStorageService.SaveFileAsync(System.Text.Encoding.UTF8.GetBytes(txt), txtName),
+                    sp.Schedule);
                     return null;
             }
 
             return BadRequest("Unsupported format.");
         }
 
-        private static FileContentResult GetYourFileContentResult()
-        {
-            byte[] mockBytes = System.Text.Encoding.UTF8.GetBytes("Hello World File Content");
-            return new FileContentResult(mockBytes, "text/plain")
-            {
-                FileDownloadName = "example.txt"
-            };
-            // return File(b, header, filename);
-        }
-
 
         // Schedule logic (RUN & EMAIL)
-        // ____________________________
+        // _________________________________________________________________________________________
         [HttpPost]
-        public static async Task runnemail__Shedule(IConfiguration configuration)
+        public async Task<IActionResult?> runnemail__Shedule(int id, IConfiguration configuration, string? filename, string? header, byte[]? fc)
         {
-            FileContentResult fileResult = GetYourFileContentResult();
-            if (fileResult == null || fileResult.FileContents == null)
-            {
-                // "No file data found.";
-            }
 
+            var result = await _fileStorageService.SaveFileAsync(fc ?? Array.Empty<byte>(), filename ?? string.Empty);
 
-            // Storage location
-            string? fileStore = configuration.GetValue<string>("FileStorage:Location");
+            if (!result.IsSuccess)
+                return BadRequest(result.Error);
 
-            // Storage location Config & INIT
-            string? fileDomain = configuration.GetValue<string>("FileStorage:Domain");
-            string? fileUsername = configuration.GetValue<string>("FileStorage:Username");
-            string? filePassword = configuration.GetValue<string>("FileStorage:Password");
-            UserCredentials credentials = new UserCredentials(fileDomain, fileUsername, filePassword);
-            using SafeAccessTokenHandle userHandle = credentials.LogonUser(SimpleImpersonation.LogonType.NewCredentials);
-            #pragma warning disable CA1416 // Validate platform compatibility
-            await WindowsIdentity.RunImpersonatedAsync(userHandle, async () => { // do whatever you want as this user.
+            return Ok();
 
-                // Save to Drive location
-                string filePath = Path.Combine(fileStore, fileResult.FileDownloadName);
+            // Send Transactional Email
+            //await _emails.SendTemplateAsync(
+            //    TemplateKeys.ResetPassword,
+            //    EmailAddress(user!.Email!, user.FirstName),
+            //    new
+            //    {
+            //        SubjectLine = "Reset your VC_IMS password",
+            //        BodyIntro = "A request was received to reset the password for your VC_IMS account. If this was you, use the button below to continue.",
+            //        MainParagraph = "For your protection, the reset link will expire after a short time and can be used only once. If you did not request a password reset, you may safely ignore this message and your password will remain unchanged.",
 
-                // 5. Stream the uploaded data into the destination file
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                //using (StreamWriter writer = new StreamWriter(stream, System.Text.Encoding.UTF8))
-                {
-                    await stream.WriteAsync(fileResult.FileContents, 0, fileResult.FileContents.Length);
-                }
-            });
-            #pragma warning restore CA1416 // Validate platform compatibility
+            //        ShowCTA = true,
+            //        ActionLabel = "Reset Password",
+            //        // ActionUrl = callbackUrl,              // formerly ResetLink
 
+            //        SupportEmail = "support.apps@gov.dm",
+            //        SupportPhone = "(767) 266-3310",
+            //        // ReferenceId = referenceId
+            //    });
         }
 
         private static string DataTableToCsv(System.Data.DataTable dt, bool includeHeaders = true)
@@ -447,7 +454,6 @@ namespace VC_IMS.Controllers
                 };
             }
         }
-        // ---------------------------------------------------------------------------
 
         // ---------------------------------------------------------------------------
         // Generic notification helper for stored procedure operations.

@@ -25,6 +25,12 @@ public class StoredProcessEditViewModel
     /// <summary>When true, CSV exports omit the column-header row.</summary>
     public bool ExcludeHeadersOnExport { get; set; }
 
+    public bool ScheduleCheck { get; set; }
+
+    public int? ScheduleForm { get; set; }
+
+    public string? Schedule { get; set; }
+
     // Plaintext inputs; encrypted on save if provided
     public string? DbUser { get; set; }
     [DataType(DataType.Password)]

@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using VC_IMS.Data;
@@ -31,7 +32,16 @@ namespace VC_IMS.Controllers
         }
 
         // GET: /StoredProcessesAdmin/Create
-        public IActionResult Create() => View(new StoredProcessEditViewModel());
+        public IActionResult Create() {
+            ViewBag.folder_n_emails = _db.VC_formTableData
+                // .GroupBy(c => c.VC_forms.Id)
+                .Select(c => new SelectListItem()
+                             {
+                                 Text = "Folder list: " + c.VC_forms.name,
+                                 Value = Convert.ToString(c.Id)
+                             }).ToList();
+            return View(new StoredProcessEditViewModel());
+        }
 
         // POST: /StoredProcessesAdmin/Create
         [HttpPost, ValidateAntiForgeryToken]
@@ -55,7 +65,10 @@ namespace VC_IMS.Controllers
                 Database = string.IsNullOrWhiteSpace(vm.Database) ? null : vm.Database!.Trim(),
                 DbUserEncrypted = string.IsNullOrWhiteSpace(vm.DbUser) ? null : Protect(vm.DbUser!),
                 DbPasswordEncrypted = string.IsNullOrWhiteSpace(vm.DbPassword) ? null : Protect(vm.DbPassword!),
-                ExcludeHeadersOnExport = vm.ExcludeHeadersOnExport
+                ExcludeHeadersOnExport = vm.ExcludeHeadersOnExport,
+                Schedule = vm.Schedule,
+                ScheduleForm = vm.ScheduleForm,
+                ScheduleCheck = vm.ScheduleCheck
             };
 
             _db.VC_storedProcesses.Add(row);
@@ -63,7 +76,10 @@ namespace VC_IMS.Controllers
 
             // CREATE Stored Procedure in DB if not exists
             // ___________________________________________
-            await _db.Database.ExecuteSqlRawAsync(String.Format(@"CREATE PROCEDURE dbo.usp_{0} {1}", vm.Name.ToString(), frm["editorVal"].ToString()));
+            if (Convert.ToBoolean(frm["ownSP"]) != false)
+            {
+                await _db.Database.ExecuteSqlRawAsync(String.Format(@"CREATE PROCEDURE dbo.usp_{0} {1}", vm.Name.ToString(), frm["editorVal"].ToString()));
+            }           
 
 
             return RedirectToAction(nameof(Index));
@@ -83,9 +99,19 @@ namespace VC_IMS.Controllers
                 ConnectionKey = row.ConnectionKey,
                 DataSource = row.DataSource,
                 Database = row.Database,
-                ExcludeHeadersOnExport = row.ExcludeHeadersOnExport
-                // Do NOT echo creds
+                ExcludeHeadersOnExport = row.ExcludeHeadersOnExport,
+                Schedule = row.Schedule,
+                ScheduleForm = row.ScheduleForm,
+                ScheduleCheck = row.ScheduleCheck
             };
+
+            ViewBag.folder_n_emails = _db.VC_formTableData
+                // .GroupBy(c => c.VC_forms.Id)
+                .Select(c => new SelectListItem()
+                {
+                    Text = "Folder list: " + c.VC_forms.name,
+                    Value = Convert.ToString(c.Id)
+                }).ToList();
             return View(vm);
         }
 

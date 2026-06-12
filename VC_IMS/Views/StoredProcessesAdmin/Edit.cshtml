@@ -10,22 +10,49 @@
     @Html.AntiForgeryToken()
     <input type="hidden" asp-for="Id" />
 
-    <div class="mb-3">
-        <label asp-for="Name" class="form-label"></label>
-        <input asp-for="Name" class="form-control" />
-        <span asp-validation-for="Name" class="text-danger"></span>
-    </div>
+    <fieldset class="border p-3 mb-3">
+        <legend class="float-none w-auto px-2">Details</legend>
+        <div class="row g-2">
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" placeholder="after ... dbo.usp_" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
 
-    <div class="mb-3">
-        <label asp-for="Description" class="form-label"></label>
-        <textarea asp-for="Description" class="form-control" rows="2"></textarea>
-    </div>
+            <div class="mb-3">
+                <label asp-for="Description" class="form-label"></label>
+                <textarea asp-for="Description" class="form-control" rows="2" value="..."></textarea>
+            </div>
 
-    <div class="mb-3 form-check">
-        <input asp-for="ExcludeHeadersOnExport" class="form-check-input" />
-        <label asp-for="ExcludeHeadersOnExport" class="form-check-label">Exclude headers on CSV export</label>
-        <div class="form-text">Check this for bank files or other exports where the consumer doesn't want a header row.</div>
-    </div>
+            <div class="mb-3 form-check">
+                <input asp-for="ExcludeHeadersOnExport" class="form-check-input" />
+                <label asp-for="ExcludeHeadersOnExport" class="form-check-label">Exclude headers on CSV export</label>
+                <div class="form-text">Check this for bank files or other exports where the consumer doesn't want a header row.</div>
+            </div>
+        </div>
+        <br />
+        <br />
+        <div class="row g-2">
+            <div class="mb-3 form-check">
+                <input asp-for="ScheduleCheck" class="form-check-input" />
+                <label asp-for="ScheduleCheck" class="form-check-label">Run as scheduled, then Email</label>
+                <div class="form-text">Check this for bank files or other exports where the consumer doesn't want a header row.</div>
+            </div>
+
+            <div class="col-md-12">
+                <p>Form with <strong>Folder Location (FormData01)</strong> __and__ <strong>Email Address(s) (FormData02)</strong> :</p>
+                <select asp-for="ScheduleForm" class=" form-control" asp-items="ViewBag.folder_n_emails">
+                    <option>-- Select --</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Schedule" class="form-label">Schedule</label>
+                <input asp-for="Schedule" class="form-control" placeholder="0 12 * */2" />
+                <span asp-validation-for="Schedule" class="text-danger"></span>
+            </div>
+        </div>
+    </fieldset>
 
     <fieldset class="border p-3 mb-3">
         <legend class="float-none w-auto px-2">Connection (Option A)</legend>
