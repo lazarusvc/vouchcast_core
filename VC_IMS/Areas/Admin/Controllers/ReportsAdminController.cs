@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using HandlebarsDotNet;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -58,6 +59,31 @@ namespace VC_IMS.Areas.Admin.Controllers
                 ViewBag.RoleId = new SelectList(await _roles.Roles.ToListAsync(), "Name", "Name", m.RoleId);
                 return View(m);
             }
+        }
+
+
+        [HttpPost]
+        public async Task<IActionResult> Duplicate()
+        {
+            var last = _db.VC_reports
+                .OrderByDescending(r => r.Id)
+                .FirstOrDefault();
+
+            if (last == null)
+                return NotFound("No records found to duplicate.");
+
+            var duplicate = new VC_reports
+            {
+                Name = last.Name,
+                Desc = last.Desc,
+                PathOverride = last.PathOverride,
+                RoleId = last.RoleId
+            };
+
+            _db.VC_reports.Add(duplicate);
+            await _db.SaveChangesAsync();
+
+            return RedirectToAction("Index");
         }
 
 

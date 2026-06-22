@@ -1,4 +1,5 @@
-﻿@model IEnumerable<VC_IMS.Models.VC_storedProcess>
+﻿@using VC_IMS.Helpers
+@model IEnumerable<VC_IMS.Models.VC_storedProcess>
 @{
     ViewData["Title"] = "Stored Processes (Admin)";
 }
@@ -15,6 +16,7 @@
                     <thead>
                         <tr>
                             <th>Manage</th>
+                            <th>Category</th>
                             <th>Name</th>
                             <th>Description</th>
                             <th>Connection</th>
@@ -30,6 +32,11 @@
                                     <a asp-action="Delete" asp-route-id="@p.Id" class="w-32-px h-32-px bg-danger-focus text-danger-main rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="gravity-ui:trash-bin"></iconify-icon></a>
                                     <a asp-area="" asp-controller="StoredProcesses" asp-action="Run" asp-route-id="@p.Id" class="w-32-px h-32-px bg-purple-light text-purple-main rounded-circle d-inline-flex align-items-center justify-content-center"><iconify-icon icon="ri:play-mini-line"></iconify-icon></a>
                                 </td>
+                                <td>
+                                    <span class="category-badge @CategoryHelper.GetCategoryBadgeClass(p.Category)">
+                                        @p.Category
+                                    </span>
+                                </td>
                                 <td>@p.Name</td>
                                 <td>@p.Description</td>
                                 <td>@(string.IsNullOrWhiteSpace(p.ConnectionKey) ? $"{p.DataSource}/{p.Database}" : p.ConnectionKey)</td>
@@ -44,6 +51,7 @@
 
 <script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/js/datatables.min.js"></script>
+<link href="~/css/site.css" rel="stylesheet" />
 <script type="text/javascript">
     // ------------------------------------------- TABLE DATATABLE INIT
     let table = new DataTable('#dataTable');

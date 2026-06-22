@@ -1,4 +1,5 @@
 ﻿using Hangfire;
+using Hangfire.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -52,6 +53,26 @@ namespace VC_IMS.Controllers
         // GET: /StoredProcesses
         public async Task<IActionResult> Index()
         {
+
+            // 1. Get the Monitoring API instance
+            IMonitoringApi monitoringApi = JobStorage.Current.GetMonitoringApi();
+
+            // 2. Define the target job/method name you are searching for
+            string targetJobName = "BackEndProcesses-Job";
+
+            // 3. Fetch and filter jobs from a specific state (e.g., Processing)
+            ViewBag.hfstatus = monitoringApi.ProcessingJobs(0, 1000) // Adjust count as needed
+                .Where(j => j.Value.Job != null && j.Value.Job.Method.Name == targetJobName)
+                .Select(j => new
+                {
+                    JobId = j.Key,
+                    Server = j.Value.ServerId,
+                    StartedAt = j.Value.StartedAt,
+                    State = "Succeeded"
+                })
+                .FirstOrDefault();
+
+
             var procs = await _db.VC_storedProcesses
                                  .AsNoTracking()
                                  .OrderBy(x => x.Name)
@@ -216,24 +237,9 @@ namespace VC_IMS.Controllers
             }
 
             // 🔔 Notify: Stored procedure export
-            //await NotifyStoredProcAsync(
-            //    subject: "Stored procedure exported",
-            //    body: $"Data from stored process '{sp.Name}' was exported as {format.ToUpperInvariant()}.",
-            //    metadata: new
-            //    {
-            //        action = "StoredProcessExport",
-            //        processId = sp.Id,
-            //        processName = sp.Name,
-            //        formId = formIdStr,
-            //        orgId = orgIdStr,
-            //        uid = uidQ,
-            //        format
-            //    },
-            //    ct: HttpContext.RequestAborted);
-
             //var username = http.User.Identity?.Name ?? $"user:{uid}";
-            //BackgroundJob.Enqueue(() => 
-            //    _notifier.NotifyUserAsync(uid, username, "DevTest", new { message = "Hello from dev endpoint" });
+            //BackgroundJob.Enqueue(() =>
+            //    _notifier.NotifyUserAsync($"user:{uid}", http.User.Identity?.Name, "DevTest", new { message = "Hello from dev endpoint" });
             //);
 
 
@@ -256,9 +262,8 @@ namespace VC_IMS.Controllers
                     RecurringJob.AddOrUpdate(
                         "BackEndProcesses Job - " + excelName, () =>
                         _fileStorageService.SaveFileAsync(xlsx1.ToArray(), excelName),
-                        // runnemail__Shedule(id, _configuration, excelName, "application/octet-stream", xlsx1.ToArray()),
                         sp.Schedule);
-                    return null;
+                    return Ok("Processing started.");
                 case "csv":
 
                     csv = DataTableToCsv(table, includeHeaders: !sp.ExcludeHeadersOnExport);
@@ -270,11 +275,10 @@ namespace VC_IMS.Controllers
 
                     // Run recurring job -------------------------------------------------------------------------
                     RecurringJob.AddOrUpdate(
-                        "BackEndProcesses Job - " + csvName, () =>
+                        "BackEndProcesses-Job", () =>
                          _fileStorageService.SaveFileAsync(System.Text.Encoding.UTF8.GetBytes(csv), csvName),
-                         // runnemail__Shedule(id, _configuration, csvName, "text/csv", System.Text.Encoding.UTF8.GetBytes(csv)),
                         sp.Schedule);
-                    return null;
+                    return Ok("Processing started.");
                 case "txt":
 
                     txt = DataTableToTxt(table, includeHeaders: !sp.ExcludeHeadersOnExport);
@@ -289,45 +293,12 @@ namespace VC_IMS.Controllers
                         "BackEndProcesses Job - " + txtName, () =>
                         _fileStorageService.SaveFileAsync(System.Text.Encoding.UTF8.GetBytes(txt), txtName),
                     sp.Schedule);
-                    return null;
+                    return Ok("Processing started.");
             }
 
             return BadRequest("Unsupported format.");
         }
 
-
-        // Schedule logic (RUN & EMAIL)
-        // _________________________________________________________________________________________
-        [HttpPost]
-        public async Task<IActionResult?> runnemail__Shedule(int id, IConfiguration configuration, string? filename, string? header, byte[]? fc)
-        {
-
-            var result = await _fileStorageService.SaveFileAsync(fc ?? Array.Empty<byte>(), filename ?? string.Empty);
-
-            if (!result.IsSuccess)
-                return BadRequest(result.Error);
-
-            return Ok();
-
-            // Send Transactional Email
-            //await _emails.SendTemplateAsync(
-            //    TemplateKeys.ResetPassword,
-            //    EmailAddress(user!.Email!, user.FirstName),
-            //    new
-            //    {
-            //        SubjectLine = "Reset your VC_IMS password",
-            //        BodyIntro = "A request was received to reset the password for your VC_IMS account. If this was you, use the button below to continue.",
-            //        MainParagraph = "For your protection, the reset link will expire after a short time and can be used only once. If you did not request a password reset, you may safely ignore this message and your password will remain unchanged.",
-
-            //        ShowCTA = true,
-            //        ActionLabel = "Reset Password",
-            //        // ActionUrl = callbackUrl,              // formerly ResetLink
-
-            //        SupportEmail = "support.apps@gov.dm",
-            //        SupportPhone = "(767) 266-3310",
-            //        // ReferenceId = referenceId
-            //    });
-        }
 
         private static string DataTableToCsv(System.Data.DataTable dt, bool includeHeaders = true)
         {

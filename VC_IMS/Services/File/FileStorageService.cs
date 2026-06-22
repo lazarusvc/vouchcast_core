@@ -14,7 +14,7 @@ public class FileSaveResult
     public bool IsSuccess { get; private init; }
     public string? Error { get; private init; }
 
-    public static FileSaveResult Success() => new() { IsSuccess = true };
+    public static FileSaveResult Success(string msg) => new() { IsSuccess = true };
     public static FileSaveResult Failure(string error) => new() { IsSuccess = false, Error = error };
 }
 
@@ -38,6 +38,7 @@ public class FileStorageService : IFileStorageService
         string? fileDomain = _configuration.GetValue<string>("FileStorage:Domain");
         string? fileUsername = _configuration.GetValue<string>("FileStorage:Username");
         string? filePassword = _configuration.GetValue<string>("FileStorage:Password");
+        string? notifEmail = _configuration.GetValue<string>("FileStorage:NotificationEmail");
 
         if (string.IsNullOrWhiteSpace(fileStore))
             return FileSaveResult.Failure("File storage location is not configured.");
@@ -57,8 +58,8 @@ public class FileStorageService : IFileStorageService
         #pragma warning restore CA1416 // Validate platform compatibility
 
         await _emails.SendTemplateAsync(
-            TemplateKeys.ResetPassword,
-            new VC_IMS.Models.Email.EmailAddress("lazarusa@dominica.gov.dm"),
+            TemplateKeys.Backend_Process_Sent,
+            new VC_IMS.Models.Email.EmailAddress(notifEmail),
             new
             {
                 SubjectLine = "Reset your VC_IMS password",
@@ -74,6 +75,6 @@ public class FileStorageService : IFileStorageService
                 // ReferenceId = referenceId
             });
 
-        return FileSaveResult.Success();
+        return FileSaveResult.Success("File Task executed successfully!");
     }
 }

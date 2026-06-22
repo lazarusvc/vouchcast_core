@@ -33,13 +33,6 @@ namespace VC_IMS.Controllers
 
         // GET: /StoredProcessesAdmin/Create
         public IActionResult Create() {
-            ViewBag.folder_n_emails = _db.VC_formTableData
-                // .GroupBy(c => c.VC_forms.Id)
-                .Select(c => new SelectListItem()
-                             {
-                                 Text = "Folder list: " + c.VC_forms.name,
-                                 Value = Convert.ToString(c.Id)
-                             }).ToList();
             return View(new StoredProcessEditViewModel());
         }
 
@@ -67,7 +60,7 @@ namespace VC_IMS.Controllers
                 DbPasswordEncrypted = string.IsNullOrWhiteSpace(vm.DbPassword) ? null : Protect(vm.DbPassword!),
                 ExcludeHeadersOnExport = vm.ExcludeHeadersOnExport,
                 Schedule = vm.Schedule,
-                ScheduleForm = vm.ScheduleForm,
+                Category = vm.Category,
                 ScheduleCheck = vm.ScheduleCheck
             };
 
@@ -101,17 +94,10 @@ namespace VC_IMS.Controllers
                 Database = row.Database,
                 ExcludeHeadersOnExport = row.ExcludeHeadersOnExport,
                 Schedule = row.Schedule,
-                ScheduleForm = row.ScheduleForm,
+                Category = row.Category,
                 ScheduleCheck = row.ScheduleCheck
             };
 
-            ViewBag.folder_n_emails = _db.VC_formTableData
-                // .GroupBy(c => c.VC_forms.Id)
-                .Select(c => new SelectListItem()
-                {
-                    Text = "Folder list: " + c.VC_forms.name,
-                    Value = Convert.ToString(c.Id)
-                }).ToList();
             return View(vm);
         }
 
@@ -138,7 +124,7 @@ namespace VC_IMS.Controllers
             row.DataSource = string.IsNullOrWhiteSpace(vm.DataSource) ? null : vm.DataSource!.Trim();
             row.Database = string.IsNullOrWhiteSpace(vm.Database) ? null : vm.Database!.Trim();
             row.ExcludeHeadersOnExport = vm.ExcludeHeadersOnExport;
-
+            row.Category = string.IsNullOrWhiteSpace(vm.Category) ? null : vm.Category!.Trim();
             if (!string.IsNullOrWhiteSpace(vm.DbUser)) row.DbUserEncrypted = Protect(vm.DbUser!);
             if (!string.IsNullOrWhiteSpace(vm.DbPassword)) row.DbPasswordEncrypted = Protect(vm.DbPassword!);
 

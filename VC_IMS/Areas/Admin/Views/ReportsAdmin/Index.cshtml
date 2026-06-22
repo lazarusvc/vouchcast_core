@@ -11,7 +11,7 @@
 
 <p><a class="btn btn-success" asp-action="Create">New Report</a></p>
 <table class="table table-sm align-middle">
-    <thead><tr><th>Name</th><th>Description</th><th>Role</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Description</th><th>Role</th><th>Actions</th></tr></thead>
             <tbody>
                 @foreach (var r in Model)
                 {
@@ -25,6 +25,10 @@
                             <form asp-action="Delete" asp-route-id="@r.Id" method="post" class="d-inline">
                                 @Html.AntiForgeryToken()
                                 <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                            </form>
+                            <form asp-action="Duplicate" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button class="btn btn-sm btn-outline-info" type="submit">Duplicate</button>
                             </form>
                         </td>
                     </tr>

@@ -28,9 +28,9 @@ namespace VC_IMS.Models
 
         public bool ScheduleCheck { get; set; }
 
-        public int? ScheduleForm { get; set; }
-
         public string? Schedule { get; set; }
+
+        public string? Category { get; set; }
 
         public ICollection<VC_storedProcessParam> Params { get; set; } = new List<VC_storedProcessParam>();
     }

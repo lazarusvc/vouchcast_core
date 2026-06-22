@@ -27,9 +27,9 @@ public class StoredProcessEditViewModel
 
     public bool ScheduleCheck { get; set; }
 
-    public int? ScheduleForm { get; set; }
-
     public string? Schedule { get; set; }
+
+    public string? Category { get; set; }
 
     // Plaintext inputs; encrypted on save if provided
     public string? DbUser { get; set; }
